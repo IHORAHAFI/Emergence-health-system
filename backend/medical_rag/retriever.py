@@ -235,7 +235,7 @@ def _with_context(question, history):
     return f"{question} {last}" if last else question
 
 
-def answer(question, history=None, vitals_text="", hotline="912"):
+def answer(question, history=None, vitals_text="", hotline="912", use_llm=True):
     """Returns a dict: ok, answer, mode, emergency, red_flags, disclaimer, sources, follow_up, safety, language."""
     question = (question or "").strip()[:500]
     if not question:
@@ -268,7 +268,7 @@ def answer(question, history=None, vitals_text="", hotline="912"):
         text = safety.NOT_FOUND_TEXT if profile["medical"] else safety.OUT_OF_SCOPE_TEXT
         mode, cited = "none", []
     else:
-        generated = llm.generate(question, passages, history or [], profile, vitals_text)
+        generated = llm.generate(question, passages, history or [], profile, vitals_text) if use_llm else None
         if generated:
             text, cited = generated
             mode = "llm_grounded"

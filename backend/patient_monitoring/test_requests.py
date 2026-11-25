@@ -301,23 +301,33 @@ def unhandled_alerts():
       (Automatic dispatch does not count as handling: a human must acknowledge it.)
     * Test request: still PENDING (accepting or cancelling it is the existing workflow)."""
     from django.urls import reverse
-    from emergency.models import EmergencyRequest
+    from emergency import escalation
+    now = timezone.now()
+    step = escalation.interval()
     out = []
-    for e in (EmergencyRequest.objects.filter(accepted_at__isnull=True).exclude(status__in=["completed", "cancelled"])
-              .select_related("patient")[:50]):
+    for e in escalation.unhandled().select_related("patient")[:50]:
         out.append({"key": f"emergency-{e.pk}", "kind": "emergency", "reference": e.reference,
                     "patient": e.patient_name or e.patient.get_full_name() or e.patient.username,
                     "patient_code": f"P-{e.patient_id:05d}", "type": e.get_emergency_type_display(),
                     "submitted_at": e.created_at.isoformat(), "priority": e.priority,
                     "status": e.status, "status_label": "PENDING", "status_detail": e.get_status_display(),
-                    "url": reverse("emergency_detail", args=[e.pk])})
+                    "url": reverse("emergency_detail", args=[e.pk]),
+                    # server-side siren schedule: the page plays the siren when alert_count goes up
+                    "alert_count": e.alert_count,
+                    "next_alert_at": escalation.next_alert_at(e).isoformat() if e.last_alert_at else None,
+                    "escalated": bool(e.escalated_at), "escalation_reason": e.escalation_reason,
+                    "severe": bool(escalation.severe_reasons(e))})
     for r in R.objects.filter(status=R.Status.PENDING).select_related("patient")[:50]:
         out.append({"key": f"test-{r.reference}", "kind": "test", "reference": r.reference,
                     "patient": r.patient.get_full_name() or r.patient.username, "patient_code": r.patient_code,
                     "type": f"Medical test: {r.test_names}", "submitted_at": r.requested_at.isoformat(),
                     "priority": "high" if r.emergency_id else "medium",
                     "status": r.status, "status_label": "PENDING", "status_detail": r.get_status_display(),
-                    "url": reverse("test_request_detail", args=[r.reference])})
+                    "url": reverse("test_request_detail", args=[r.reference]),
+                    # same 2-minute cadence, derived from the request time (no escalation for test requests)
+                    "alert_count": 1 + int((now - r.requested_at) / step),
+                    "next_alert_at": (r.requested_at + step * (1 + int((now - r.requested_at) / step))).isoformat(),
+                    "escalated": False, "escalation_reason": "", "severe": False})
     return sorted(out, key=lambda a: a["submitted_at"])
 
 
@@ -348,7 +358,12 @@ def accept_alert(key, operator):
 def operator_feed():
     """What the operator alarm needs: unhandled requests + open test requests + recent critical vital-sign alerts
     (used by polling and after WS nudges)."""
+    from emergency import escalation
     from .models import EmergencyAlert
+    try:
+        escalation.tick()  # advance the per-request siren counters (idempotent, safe under concurrent polls)
+    except Exception:
+        log.exception("alert tick failed")
     pending = list(R.objects.filter(status=R.Status.PENDING).select_related("patient", "emergency")[:50])
     since = timezone.now() - timedelta(minutes=30)
     critical = list(EmergencyAlert.objects.filter(status="open", created_at__gte=since)

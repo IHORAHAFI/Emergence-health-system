@@ -15,4 +15,16 @@ def navigation(request):
         if u.is_superuser or u.role in ("operator", "admin"):
             from patient_monitoring.models import MedicalTestRequest
             ctx["pending_tests"] = MedicalTestRequest.objects.filter(status="pending").count()
+            ctx["siren_url"] = siren_url()
     return ctx
+
+
+def siren_url():
+    """URL of the operator siren, or "" if the file has not been added yet (never crash the page over it)."""
+    from django.contrib.staticfiles import finders
+    from django.templatetags.static import static
+    name = getattr(settings, "ALERT_SIREN_FILE", "audio/police_wail_emergency_siren.mp3")
+    try:
+        return static(name) if finders.find(name) else ""
+    except Exception:  # manifest storage: file not collected yet
+        return ""

@@ -199,6 +199,11 @@ def create_emergency(patient, data, allow_duplicate=False):
     if profile and profile.notify_emergency_contact and profile.emergency_contact_phone:
         sms(profile.emergency_contact_phone, "Emergency alert",
             f"{patient.get_full_name() or patient.username} requested emergency help ({em.reference}).", em)
+    try:
+        from . import escalation
+        escalation.start(em)  # alert 1 (+ immediate escalation for severe symptoms)
+    except Exception:  # the request is saved and operators are nudged even if this fails
+        log.exception("Alert schedule failed for %s", em.reference)
     nudge_operators(em)
     return em
 

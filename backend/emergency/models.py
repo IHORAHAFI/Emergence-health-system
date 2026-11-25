@@ -94,6 +94,13 @@ class EmergencyRequest(models.Model):
     accepted_at = models.DateTimeField(null=True, blank=True)
     accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name="accepted_emergencies")
+    # Siren schedule (server-side, so a browser refresh never resets it): alert 1 on arrival, then one every
+    # ALERT_INTERVAL until an operator accepts. After ALERT_ESCALATE_AFTER alerts the AI escalation runs once.
+    alert_count = models.PositiveSmallIntegerField(default=0)
+    last_alert_at = models.DateTimeField(null=True, blank=True)
+    escalated_at = models.DateTimeField(null=True, blank=True)
+    escalation_reason = models.CharField(max_length=20, blank=True, help_text="severe_symptoms or no_operator")
+    escalation = models.JSONField(default=dict, blank=True, help_text="What the AI escalation did (audit)")
 
     class Meta:
         ordering = ["-created_at"]

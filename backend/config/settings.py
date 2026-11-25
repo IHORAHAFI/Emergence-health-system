@@ -179,3 +179,9 @@ LOCALE_PATHS = [BASE_DIR / "locale"]
 
 # AI assistant: stored conversations are deleted after this many days (python manage.py purge_assistant_history)
 ASSISTANT_HISTORY_DAYS = int(os.getenv("ASSISTANT_HISTORY_DAYS", "30"))
+
+# Operator siren: one alert per request every ALERT_INTERVAL_SECONDS until accepted; AI escalation after N alerts
+ALERT_INTERVAL_SECONDS = int(os.getenv("ALERT_INTERVAL_SECONDS", "120"))
+ALERT_ESCALATE_AFTER = int(os.getenv("ALERT_ESCALATE_AFTER", "3"))
+# Siren file played on the operator dashboard (relative to static/)
+ALERT_SIREN_FILE = os.getenv("ALERT_SIREN_FILE", "audio/police_wail_emergency_siren.mp3")
