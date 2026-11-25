@@ -140,6 +140,8 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+# Allow the hosted Flutter web app (Render static site) to call the API.
+CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://[\w-]+\.onrender\.com$"]
 
 # Notifications: keep SIMULATE=True during development (logs instead of sending).
 NOTIFICATIONS_SIMULATE = os.getenv("NOTIFICATIONS_SIMULATE", "True") == "True"

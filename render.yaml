@@ -19,6 +19,16 @@ services:
         fromDatabase:
           name: ai-medical-db
           property: connectionString
+  - type: web
+    name: ai-medical-emergency-app
+    runtime: static
+    rootDir: mobile_app
+    buildCommand: rm -rf $HOME/flutter && git clone --depth 1 -b stable https://github.com/flutter/flutter.git $HOME/flutter && $HOME/flutter/bin/flutter config --enable-web && $HOME/flutter/bin/flutter pub get && $HOME/flutter/bin/flutter build web --release --dart-define=API_URL=https://ai-medical-emergency.onrender.com/api
+    staticPublishPath: build/web
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
 databases:
   - name: ai-medical-db
     plan: free
