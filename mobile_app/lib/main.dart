@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/paramedic_home_screen.dart';
-import 'screens/patient_home_screen.dart';
+import 'screens/patient_shell.dart';
 import 'services/api_service.dart';
+import 'theme.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiService.instance.loadToken();
+  // Expired session -> back to login from anywhere.
+  ApiService.instance.onSessionExpired = () => navigatorKey.currentState
+      ?.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
   runApp(const SmartEmergencyApp());
 }
 
@@ -19,7 +25,8 @@ class SmartEmergencyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Smart Emergency',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: Colors.red, useMaterial3: true),
+      navigatorKey: navigatorKey,
+      theme: buildTheme(),
       home: const StartupGate(),
     );
   }
@@ -47,4 +54,4 @@ class StartupGate extends StatelessWidget {
 }
 
 Widget homeForRole(String? role) =>
-    role == 'paramedic' ? const ParamedicHomeScreen() : const PatientHomeScreen();
+    role == 'paramedic' ? const ParamedicHomeScreen() : const PatientShell();

@@ -9,7 +9,11 @@ from .models import Notification
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        fields = ("id", "channel", "title", "message", "emergency", "is_read", "created_at")
+        fields = ("id", "channel", "title", "message", "emergency", "emergency_ref", "test_request_ref",
+                  "is_read", "created_at")
+
+    emergency_ref = serializers.CharField(source="emergency.reference", read_only=True, default=None)
+    test_request_ref = serializers.CharField(source="test_request.reference", read_only=True, default=None)
 
 
 class NotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -20,7 +24,15 @@ class NotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         q = Q(recipient=u)
         if u.hospital_id:
             q |= Q(hospital_id=u.hospital_id)
-        return Notification.objects.filter(q)
+        qs = Notification.objects.filter(q).select_related("emergency", "test_request")
+        if self.request.query_params.get("unread") == "1":
+            qs = qs.filter(is_read=False)
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="read-all")
+    def read_all(self, request):
+        n = self.get_queryset().filter(is_read=False).update(is_read=True)
+        return Response({"updated": n})
 
     @action(detail=True, methods=["post"])
     def read(self, request, pk=None):

@@ -2,6 +2,8 @@ import 'hospital.dart';
 
 class Emergency {
   final int id;
+  final String reference;
+  final DateTime? createdAt;
   final String type;
   final String typeDisplay;
   final String status;
@@ -20,6 +22,8 @@ class Emergency {
 
   Emergency({
     required this.id,
+    this.reference = '',
+    this.createdAt,
     required this.type,
     required this.typeDisplay,
     required this.status,
@@ -44,6 +48,8 @@ class Emergency {
     final hosp = j['assigned_hospital'];
     return Emergency(
       id: j['id'],
+      reference: j['reference'] ?? '',
+      createdAt: DateTime.tryParse(j['created_at'] ?? '')?.toLocal(),
       type: j['emergency_type'],
       typeDisplay: j['type_display'] ?? j['emergency_type'],
       status: j['status'],

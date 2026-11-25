@@ -5,10 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/emergency.dart';
 import '../models/hospital.dart';
+import '../models/test_request.dart';
+import '../models/vital_reading.dart';
 
 class ApiException implements Exception {
   final String message;
-  ApiException(this.message);
+  final int status;
+  ApiException(this.message, [this.status = 0]);
   @override
   String toString() => message;
 }
@@ -17,52 +20,114 @@ class ApiService {
   ApiService._();
   static final instance = ApiService._();
 
-  /// Android emulator reaches the host PC at 10.0.2.2.
-  /// For a real phone use your PC's LAN IP, e.g. http://192.168.1.10:8000/api
+  /// Set at build time:  flutter run --dart-define=API_URL=https://your-app.onrender.com/api
+  /// Android emulator reaches the host PC at 10.0.2.2; a real phone needs your PC's LAN IP.
   static const baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://10.0.2.2:8000/api');
 
   String? _token;
+  String? _refresh;
   bool get isLoggedIn => _token != null;
+
+  /// Called when the session expires so the UI can return to the login screen.
+  void Function()? onSessionExpired;
 
   Future<void> loadToken() async {
     final p = await SharedPreferences.getInstance();
     _token = p.getString('access');
+    _refresh = p.getString('refresh');
   }
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
+        'Accept-Language': 'en',
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
-  dynamic _handle(http.Response r) {
-    final body = r.body.isEmpty ? null : jsonDecode(utf8.decode(r.bodyBytes));
-    if (r.statusCode >= 200 && r.statusCode < 300) return body;
-    if (r.statusCode == 401) logout();
-    throw ApiException(body is Map ? body.values.map((v) => v.toString()).join('\n') : 'Error ${r.statusCode}');
+  String _message(dynamic body, int code) {
+    if (body is Map) {
+      if (body['detail'] != null) return body['detail'].toString();
+      return body.entries
+          .map((e) => '${e.key == 'non_field_errors' ? '' : '${e.key}: '}${e.value is List ? (e.value as List).join(' ') : e.value}')
+          .join('\n');
+    }
+    if (body is List) return body.join('\n');
+    return code == 0 ? 'Cannot reach the server' : 'Server error ($code)';
   }
 
-  Future<dynamic> get(String path, [Map<String, String>? q]) async =>
-      _handle(await http.get(Uri.parse('$baseUrl$path').replace(queryParameters: q), headers: _headers));
+  Future<bool> _tryRefresh() async {
+    if (_refresh == null) return false;
+    try {
+      final r = await http.post(Uri.parse('$baseUrl/auth/refresh/'),
+          headers: {'Content-Type': 'application/json'}, body: jsonEncode({'refresh': _refresh}));
+      if (r.statusCode != 200) return false;
+      _token = jsonDecode(r.body)['access'];
+      (await SharedPreferences.getInstance()).setString('access', _token!);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
-  Future<dynamic> post(String path, Map<String, dynamic> data) async =>
-      _handle(await http.post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(data)));
+  Future<dynamic> _send(Future<http.Response> Function() call, {bool retry = true}) async {
+    http.Response r;
+    try {
+      r = await call().timeout(const Duration(seconds: 30));
+    } catch (_) {
+      throw ApiException('Cannot reach the server. Check your internet connection.');
+    }
+    if (r.statusCode == 401 && retry && _token != null && await _tryRefresh()) {
+      return _send(call, retry: false);
+    }
+    dynamic body;
+    try {
+      body = r.body.isEmpty ? null : jsonDecode(utf8.decode(r.bodyBytes));
+    } catch (_) {
+      body = null;
+    }
+    if (r.statusCode >= 200 && r.statusCode < 300) return body;
+    if (r.statusCode == 401 && _token != null) {
+      await logout();
+      onSessionExpired?.call();
+    }
+    throw ApiException(_message(body, r.statusCode), r.statusCode);
+  }
+
+  Uri _u(String path, [Map<String, String>? q]) => Uri.parse('$baseUrl$path').replace(queryParameters: q);
+
+  Future<dynamic> get(String path, [Map<String, String>? q]) => _send(() => http.get(_u(path, q), headers: _headers));
+  Future<dynamic> post(String path, [Map<String, dynamic>? data]) =>
+      _send(() => http.post(_u(path), headers: _headers, body: jsonEncode(data ?? {})));
+  Future<dynamic> patch(String path, Map<String, dynamic> data) =>
+      _send(() => http.patch(_u(path), headers: _headers, body: jsonEncode(data)));
+  Future<dynamic> delete(String path) => _send(() => http.delete(_u(path), headers: _headers));
 
   // ---- auth ----
   Future<void> login(String username, String password) async {
-    final data = await post('/auth/login/', {'username': username, 'password': password});
+    final data = await _send(
+        () => http.post(_u('/auth/login/'), headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'username': username, 'password': password})),
+        retry: false);
     _token = data['access'];
+    _refresh = data['refresh'];
     final p = await SharedPreferences.getInstance();
     await p.setString('access', _token!);
+    if (_refresh != null) await p.setString('refresh', _refresh!);
   }
 
   Future<void> register(Map<String, dynamic> data) => post('/auth/register/', data);
 
   Future<Map<String, dynamic>> me() async => Map<String, dynamic>.from(await get('/auth/me/'));
+  Future<Map<String, dynamic>> updateMe(Map<String, dynamic> d) async => Map<String, dynamic>.from(await patch('/auth/me/', d));
+  Future<Map<String, dynamic>> profile() async => Map<String, dynamic>.from(await get('/auth/profile/'));
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> d) async =>
+      Map<String, dynamic>.from(await patch('/auth/profile/', d));
 
   Future<void> logout() async {
     _token = null;
+    _refresh = null;
     final p = await SharedPreferences.getInstance();
     await p.remove('access');
+    await p.remove('refresh');
   }
 
   // ---- hospitals ----
@@ -84,6 +149,54 @@ class ApiService {
 
   Future<Emergency> setStatus(int id, String status) async =>
       Emergency.fromJson(await post('/emergencies/$id/status/', {'status': status}));
+
+  /// Consent to share vital signs with the team handling this emergency.
+  Future<void> giveMonitoringConsent(String ref) => post('/monitoring/$ref/consent/');
+
+  /// A REAL Bluetooth measurement sent during an emergency (requires consent).
+  Future<VitalReading> sendEmergencyReading(String ref, Map<String, dynamic> values, Map<String, dynamic> device) async =>
+      VitalReading.fromJson(await post('/monitoring/$ref/readings/', {...values, 'source': 'bluetooth', 'device': device}));
+
+  // ---- medical tests ----
+  Future<List<TestRequest>> myTests({bool openOnly = false}) async {
+    final list = await get('/tests/', openOnly ? {'open': '1'} : null);
+    return (list as List).map((e) => TestRequest.fromJson(e)).toList();
+  }
+
+  Future<TestRequest> requestTests(List<String> codes, {String note = ''}) async =>
+      TestRequest.fromJson(await post('/tests/', {'tests': codes, 'note': note}));
+
+  Future<TestRequest> getTest(String ref) async => TestRequest.fromJson(await get('/tests/$ref/'));
+  Future<void> cancelTest(String ref) => post('/tests/$ref/cancel/');
+
+  /// A REAL Bluetooth measurement for a running test.
+  Future<void> sendTestReading(String ref, Map<String, dynamic> values, Map<String, dynamic> device) =>
+      post('/tests/$ref/readings/', {...values, 'device': device});
+
+  Future<List<VitalReading>> latestVitals({int limit = 30}) async {
+    final list = await get('/vitals/latest/', {'limit': '$limit'});
+    return (list as List).map((e) => VitalReading.fromJson(e)).toList();
+  }
+
+  // ---- notifications ----
+  Future<List<Map<String, dynamic>>> notifications({bool unreadOnly = false}) async {
+    final list = await get('/notifications/', unreadOnly ? {'unread': '1'} : null);
+    return (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<void> markRead(int id) => post('/notifications/$id/read/');
+  Future<void> markAllRead() => post('/notifications/read-all/');
+
+  // ---- medical information ----
+  Future<List<Map<String, dynamic>>> diseases({String q = ''}) async {
+    final list = await get('/diseases/', q.isEmpty ? null : {'q': q});
+    return (list as List).map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<Map<String, dynamic>> disease(String slug) async => Map<String, dynamic>.from(await get('/diseases/$slug/'));
+
+  Future<Map<String, dynamic>> ask(String question) async =>
+      Map<String, dynamic>.from(await post('/assistant/ask/', {'question': question}));
 
   // ---- ambulance (paramedic) ----
   Future<Map<String, dynamic>> myAmbulance() async => Map<String, dynamic>.from(await get('/ambulances/mine/'));

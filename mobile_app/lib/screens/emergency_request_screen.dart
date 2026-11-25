@@ -32,12 +32,22 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
   String? _locError;
   bool _sending = false;
 
-  @override
-  void initState() {
-    super.initState();
-    LocationService.current()
-        .then((p) => setState(() => _pos = p))
-        .catchError((e) => setState(() => _locError = e.toString()));
+  bool _locating = false;
+
+  /// Location is read only after the patient taps "Share my location" (explicit consent).
+  Future<void> _locate() async {
+    setState(() {
+      _locating = true;
+      _locError = null;
+    });
+    try {
+      final p = await LocationService.current();
+      if (mounted) setState(() => _pos = p);
+    } catch (e) {
+      if (mounted) setState(() => _locError = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
   }
 
   Future<void> _send() async {
@@ -50,6 +60,8 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
         'latitude': _pos!.latitude,
         'longitude': _pos!.longitude,
         'location_accuracy_m': _pos!.accuracy,
+        'location_source': 'gps',
+        'location_consent': true,
         'conscious': _conscious,
         'breathing_difficulty': _breathing,
         'severe_bleeding': _bleeding,
@@ -75,13 +87,23 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
       appBar: AppBar(title: const Text('Request emergency help')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(
-          color: _pos != null ? Colors.green.shade50 : Colors.orange.shade50,
+          color: _pos != null ? const Color(0xFFECFDF3) : const Color(0xFFFFFAEB),
           child: ListTile(
-            leading: const Icon(Icons.my_location),
+            contentPadding: const EdgeInsets.all(12),
+            leading: Icon(_pos != null ? Icons.location_on : Icons.location_searching,
+                color: _pos != null ? Colors.green : Colors.orange, size: 32),
             title: Text(_pos != null
-                ? 'Location found (±${_pos!.accuracy.toStringAsFixed(0)} m)'
-                : (_locError ?? 'Getting your location…')),
+                ? 'Location shared (±${_pos!.accuracy.toStringAsFixed(0)} m)'
+                : (_locError ?? 'Share your location so the ambulance can find you')),
             subtitle: _pos != null ? Text('${_pos!.latitude.toStringAsFixed(5)}, ${_pos!.longitude.toStringAsFixed(5)}') : null,
+            trailing: _pos != null
+                ? null
+                : _locating
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                    : FilledButton(
+                        style: FilledButton.styleFrom(minimumSize: const Size(80, 44)),
+                        onPressed: _locate,
+                        child: const Text('Share')),
           ),
         ),
         const SizedBox(height: 8),
@@ -109,7 +131,7 @@ class _EmergencyRequestScreenState extends State<EmergencyRequestScreen> {
             decoration: const InputDecoration(labelText: 'Describe what happened (optional)', border: OutlineInputBorder())),
         const SizedBox(height: 20),
         FilledButton.icon(
-          style: FilledButton.styleFrom(backgroundColor: Colors.red, padding: const EdgeInsets.all(18)),
+          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD92D20), minimumSize: const Size.fromHeight(60)),
           icon: const Icon(Icons.emergency),
           label: Text(_sending ? 'Sending…' : 'SEND EMERGENCY REQUEST'),
           onPressed: (_pos == null || _sending) ? null : _send,
