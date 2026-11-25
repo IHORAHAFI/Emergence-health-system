@@ -1,0 +1,39 @@
+{% extends "dashboard/base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}{% if amb %}Edit {{ amb.plate_number }}{% else %}Register ambulance{% endif %}{% endblock %}
+{% block page_title %}Ambulance management{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>{% if amb %}Edit ambulance {{ amb.plate_number }}{% else %}Register a new ambulance{% endif %}</h1>
+  <p class="subtitle">New ambulances start as <b>Available</b>. Status then follows the emergency workflow automatically.</p></div>
+  <a class="btn btn-light" href="{% url 'ambulances' %}"><i class="bi bi-arrow-left"></i> Back</a></div>
+<form method="post" class="row g-3" novalidate>{% csrf_token %}
+  {% for e in form.non_field_errors %}<div class="col-12"><div class="alert alert-warning mb-0">{{ e }}</div></div>{% endfor %}
+  <div class="col-lg-6"><div class="card p-3 p-md-4">
+    <h2 class="h5 mb-3">Identification and crew</h2>
+    {% include "_field.html" with f=form.plate_number %}
+    {% include "_field.html" with f=form.ambulance_type %}
+    {% include "_field.html" with f=form.base_hospital %}
+    {% include "_field.html" with f=form.driver %}
+    {% include "_field.html" with f=form.contact_phone %}
+  </div></div>
+  <div class="col-lg-6"><div class="card p-3 p-md-4">
+    <h2 class="h5 mb-3">Current location</h2>
+    <div class="row g-2"><div class="col-6">{% include "_field.html" with f=form.latitude %}</div><div class="col-6">{% include "_field.html" with f=form.longitude %}</div></div>
+    <div id="map" class="map-sm mt-2"></div>
+    <div class="form-text">Click the map to set the position. Positions entered here are labelled "not live GPS".</div>
+  </div></div>
+  <div class="col-12"><button class="btn btn-primary"><i class="bi bi-check-lg"></i> {% if amb %}Save changes{% else %}Register ambulance{% endif %}</button></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const lat = document.getElementById('id_latitude'), lng = document.getElementById('id_longitude');
+const start = [parseFloat(lat.value) || -1.9536, parseFloat(lng.value) || 30.0606];
+const map = App.tiles(L.map('map').setView(start, 13));
+{% for h in hospitals %}L.marker([{{ h.latitude }}, {{ h.longitude }}], {icon: App.icon('bi-hospital-fill', '#1d6fd8')}).addTo(map).bindTooltip("{{ h.name|escapejs }}");
+{% endfor %}
+const m = L.marker(start, {draggable: true, icon: App.icon('bi-truck-front-fill', '#c62828')}).addTo(map);
+const set = p => { m.setLatLng(p); lat.value = p.lat.toFixed(6); lng.value = p.lng.toFixed(6); };
+map.on('click', e => set(e.latlng)); m.on('dragend', e => set(e.target.getLatLng()));
+</script>
+{% endblock %}

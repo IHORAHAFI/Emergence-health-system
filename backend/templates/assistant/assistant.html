@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}AI medical assistant{% endblock %}
+{% block page_title %}AI medical assistant{% endblock %}
+{% block content %}
+<div class="row g-3 justify-content-center">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-chat-square-heart text-primary fs-5"></i> <span>Health information assistant</span><span class="badge bg-light text-primary border ms-auto">Trusted sources only</span></div>
+      <div class="card-body">
+        <div class="chat-box mb-3" id="chat" aria-live="polite">
+          <div class="msg bot">Hello. Describe your symptoms or ask a health or first-aid question. I give general information from WHO, NHS, IFRC and AHA guidance, with the sources - <b>I cannot diagnose you or prescribe treatment</b>.</div>
+        </div>
+        <form id="ask" class="d-flex gap-2">{% csrf_token %}
+          <label for="q" class="visually-hidden">Your question</label>
+          <input id="q" class="form-control" maxlength="500" placeholder="e.g. What are the signs of a stroke?" required autocomplete="off">
+          <button class="btn btn-primary px-3" id="send"><i class="bi bi-send"></i><span class="d-none d-sm-inline"> Send</span></button>
+        </form>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          {% for s in suggestions %}<button type="button" class="btn btn-sm btn-light border suggestion">{{ s }}</button>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card p-3 mb-3 border-danger">
+      <h2 class="h6 text-danger"><i class="bi bi-exclamation-triangle-fill"></i> When to get emergency help</h2>
+      <ul class="small mb-2"><li>Not breathing or struggling to breathe</li><li>Chest pain or pressure</li><li>Face drooping, arm weakness, slurred speech</li><li>Severe bleeding or a serious injury</li><li>Unconscious, fitting, or very confused</li></ul>
+      {% if user.role == 'patient' %}<a class="btn btn-danger btn-sm w-100 mb-2" href="{% url 'request_emergency' %}"><i class="bi bi-exclamation-octagon"></i> Request emergency help</a>{% endif %}
+      <p class="small mb-0">Or call <b>{{ hotline }}</b> immediately.</p>
+    </div>
+    <div class="card p-3 mb-3"><h2 class="h6"><i class="bi bi-info-circle text-primary"></i> Medical disclaimer</h2><p class="small mb-0">{{ disclaimer }} Answers come only from a small curated knowledge base of public guidance; the sources are shown with every answer. Always follow advice from a qualified health worker.</p></div>
+    <div class="card p-3"><h2 class="h6"><i class="bi bi-journal-medical text-primary"></i> Medical information</h2><p class="small mb-2">Browse diseases and conditions by category.</p><a class="btn btn-outline-primary btn-sm" href="{% url 'disease_list' %}">Open library</a></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const chat = document.getElementById('chat'), qEl = document.getElementById('q'), E = App.esc;
+function add(cls, html) { const d = document.createElement('div'); d.className = 'msg ' + cls; d.innerHTML = html; chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d; }
+async function ask(q) {
+  add('user', E(q));
+  const wait = add('bot', '<span class="text-muted"><span class="spinner-border spinner-border-sm"></span> Searching trusted sources…</span>');
+  try {
+    const r = await fetch("{% url 'assistant_ask' %}", {method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': App.csrf()}, body: JSON.stringify({question: q})});
+    const d = await r.json();
+    let html = '';
+    if (d.emergency) html += `<div class="alert alert-danger py-2 small mb-2"><b>This may be an emergency.</b> Do not wait for information - get help now.
+      {% if user.role == 'patient' %}<a class="alert-link" href="{% url 'request_emergency' %}">Request emergency help</a>{% elif not user.is_authenticated %}<a class="alert-link" href="{% url 'login' %}">Log in to request help</a>{% endif %} or call {{ hotline }}.</div>`;
+    if (!d.ok) { wait.innerHTML = html + E(d.error); return; }
+    html += `<div>${E(d.answer)}</div>`;
+    if (d.sources && d.sources.length) html += '<div class="src"><b>Sources:</b> ' + d.sources.map(s => `<a href="${E(s.url)}" target="_blank" rel="noopener">${E(s.source)} - ${E(s.title)}</a>`).join('; ') + '</div>';
+    if (d.library && d.library.length) html += '<div class="src"><b>Read more:</b> ' + d.library.map(l => `<a href="${E(l.url)}">${E(l.name)}</a>${l.reviewed ? '' : ' <span class="badge bg-warning text-dark">pending review</span>'}`).join(' · ') + '</div>';
+    html += `<div class="small text-muted mt-1">${E(d.disclaimer)}</div>`;
+    wait.innerHTML = html;
+  } catch (err) {
+    wait.innerHTML = 'The assistant is unavailable right now. If this is an emergency, get help immediately (call {{ hotline }}).';
+  }
+}
+document.getElementById('ask').onsubmit = e => { e.preventDefault(); const q = qEl.value.trim(); if (!q) return; qEl.value = ''; ask(q); };
+document.querySelectorAll('.suggestion').forEach(b => b.onclick = () => ask(b.textContent));
+</script>
+{% endblock %}

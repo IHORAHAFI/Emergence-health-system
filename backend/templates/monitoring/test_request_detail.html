@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}{{ req.reference }}{% endblock %}
+{% block page_title %}Patient test requests{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small"><li class="breadcrumb-item"><a href="{% url 'test_requests' %}">Patient test requests</a></li><li class="breadcrumb-item active">{{ req.reference }}</li></ol></nav>
+<div class="page-header">
+  <div><h1>{{ req.reference }} · {{ req.test_names }}</h1>
+    <p class="subtitle">Requested {{ req.requested_at|date:"d M Y H:i:s" }} ({{ req.requested_at|timesince }} ago){% if req.assigned_operator %} · handled by {{ req.assigned_operator.username }}{% endif %}</p></div>
+  <span class="status-pill fs-6 {% if req.status == 'pending' %}warning{% elif req.status == 'accepted' %}info{% elif req.status == 'testing' %}primary{% elif req.status == 'completed' %}success{% else %}secondary{% endif %}">{{ req.status_short }}</span>
+</div>
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3">
+      <div class="section-title">Patient (from the patient's own account)</div>
+      <h2 class="h5 mb-1">{{ p.get_full_name|default:p.username }}</h2>
+      <p class="small text-muted mb-2">{{ req.patient_code }} · {{ p.phone|default:"no phone" }}</p>
+      {% if profile %}
+      <dl class="row small mb-0">
+        <dt class="col-5">Age / gender</dt><dd class="col-7">{{ profile.age|default:"-" }} / {{ profile.gender|default:"-" }}</dd>
+        <dt class="col-5">Blood group</dt><dd class="col-7">{{ profile.blood_group|default:"-" }}</dd>
+        <dt class="col-5">Allergies</dt><dd class="col-7">{{ profile.allergies|default:"None recorded" }}</dd>
+        <dt class="col-5">Conditions</dt><dd class="col-7">{{ profile.chronic_conditions|default:"None recorded" }}</dd>
+      </dl>{% else %}<p class="small text-muted mb-0">No medical profile.</p>{% endif %}
+      {% if req.emergency %}<div class="alert alert-danger small mt-2 mb-0">Active emergency <a class="alert-link" href="{% url 'emergency_detail' req.emergency.id %}">{{ req.emergency.reference }}</a> ({{ req.emergency.get_status_display }})</div>{% endif %}
+      {% if req.note %}<p class="small mt-2 mb-0"><b>Patient's note:</b> {{ req.note }}</p>{% endif %}
+    </div>
+    <div class="card p-3 mb-3" id="start">
+      <div class="section-title">Actions</div>
+      {% if req.status == 'pending' %}
+        <form method="post" action="{% url 'test_request_action' req.reference %}">{% csrf_token %}<button name="action" value="accept" class="btn btn-success w-100 mb-2"><i class="bi bi-check2-circle"></i> Accept request</button></form>
+      {% endif %}
+      {% if req.status == 'accepted' or req.status == 'testing' %}
+        {% if session %}
+          <a class="btn btn-primary w-100 mb-2" href="{% url 'sim_panel' session.id %}"><i class="bi bi-broadcast-pin"></i> Open live IoT test</a>
+        {% else %}
+        <form method="post" action="{% url 'test_request_action' req.reference %}" class="mb-2">{% csrf_token %}
+          <input type="hidden" name="action" value="start">
+          <div class="row g-2 mb-2">
+            <div class="col-7"><label class="form-label small" for="scenario">Simulated condition</label><select class="form-select form-select-sm" id="scenario" name="scenario">{% for k, sc in scenarios.items %}<option value="{{ k }}">{{ sc.label }}</option>{% endfor %}</select></div>
+            <div class="col-5"><label class="form-label small" for="speed">Speed</label><select class="form-select form-select-sm" id="speed" name="speed"><option value="1">1x</option><option value="2">2x</option><option value="5">5x</option></select></div>
+          </div>
+          <p class="small text-muted mb-2">Only the requested device{{ req.tests|length|pluralize }} will run: <b>{{ req.test_names }}</b>. Readings are stored as <b>SIMULATED</b> for {{ p.get_full_name|default:p.username }}.</p>
+          <button class="btn btn-primary w-100"><i class="bi bi-play-circle"></i> Start IoT test</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{% url 'test_request_action' req.reference %}">{% csrf_token %}<button name="action" value="complete" class="btn btn-outline-success w-100 mb-2" {% if not data.readings %}disabled title="No measurement yet"{% endif %}><i class="bi bi-clipboard2-check"></i> Complete test &amp; send results</button></form>
+      {% endif %}
+      {% if req.is_open %}
+        <form method="post" action="{% url 'test_request_action' req.reference %}" data-confirm="Cancel this request? The patient will be told.">{% csrf_token %}<button name="action" value="cancel" class="btn btn-outline-secondary w-100 btn-sm">Cancel request</button></form>
+      {% else %}<p class="small text-muted mb-0">This request is {{ req.status_short|lower }} - no further measurements can be stored.</p>{% endif %}
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card mb-3"><div class="card-header d-flex justify-content-between"><span>Results</span><a href="{% url 'patient_test_detail' req.reference %}">Patient's view</a></div>
+      <div class="card-body">
+        {% if data.summary %}<div class="row g-2">{% for k, s in data.summary.items %}<div class="col-6 col-md-4"><div class="border rounded p-2"><div class="small text-muted">{{ s.label }}</div><div class="fs-5 fw-bold">{{ s.display }}</div><div class="small">{% if s.simulated %}<span class="badge badge-sim">SIMULATED</span>{% else %}<span class="badge bg-primary">REAL</span>{% endif %}</div></div></div>{% endfor %}</div>
+        {% else %}<p class="text-muted mb-0">No measurements yet.</p>{% endif %}
+      </div></div>
+    <div class="card"><div class="card-header">Previous test requests of this patient</div><div class="table-responsive"><table class="table table-sm">
+      <thead><tr><th>Request</th><th>Tests</th><th>Date</th><th>Status</th></tr></thead><tbody>
+      {% for r in previous %}<tr class="clickable" onclick="location='{% url 'test_request_detail' r.reference %}'"><td class="small">{{ r.reference }}</td><td class="small">{{ r.test_names }}</td><td class="small">{{ r.requested_at|date:"d M Y H:i" }}</td><td class="small">{{ r.status_short }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="text-muted small text-center py-2">No previous requests.</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// stay in sync if the request changes elsewhere (e.g. patient cancels)
+let st = "{{ req.status }}";
+App.live(async () => { const r = await fetch("{% url 'test_data' req.reference %}", {credentials: 'same-origin'}); if (r.ok && (await r.json()).status !== st) location.reload(); }, {interval: 5000});
+</script>
+{% endblock %}

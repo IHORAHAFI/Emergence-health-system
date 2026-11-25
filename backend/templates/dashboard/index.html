@@ -1,0 +1,179 @@
+{% extends "dashboard/base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% now "G" as hour %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div>
+    <h1 class="page-h1 mb-1">{% if hour|add:0 < 12 %}Good morning{% elif hour|add:0 < 18 %}Good afternoon{% else %}Good evening{% endif %}, {{ user.first_name|default:user.username }}</h1>
+    <div class="d-flex flex-wrap align-items-center gap-2 small text-muted">
+      <span>{% now "l j F" %}{% if user.role == 'hospital' %} · {{ user.hospital.name }}{% endif %}</span>
+      <span class="live-tag"><span class="dot pulse" aria-hidden="true"></span>Live</span>
+      <span id="refresh-note">updates every 30 s</span>
+      <button type="button" class="btn btn-sm btn-link p-0" id="refresh-toggle" aria-pressed="false">Pause</button>
+    </div>
+  </div>
+  {% if user.role != 'hospital' %}
+  <form method="post" action="{% url 'simulate' %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm"><i class="bi bi-lightning" aria-hidden="true"></i> Simulated emergency</button></form>
+  {% endif %}
+</div>
+
+{% if vital_alert_count %}
+<a class="card p-3 mb-3 d-flex flex-row align-items-center gap-3 text-decoration-none border-danger" href="{% url 'vitals_alerts' %}">
+  <span class="kpi-chip red" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></span>
+  <span class="flex-grow-1"><b class="text-danger">{{ vital_alert_count }} vital-sign alert{{ vital_alert_count|pluralize }}</b>
+    <span class="d-block small text-muted text-truncate">{% for a in vital_alerts|slice:":2" %}{{ a.emergency.reference }} · {{ a.message }}{% if not forloop.last %} — {% endif %}{% endfor %}</span></span>
+  <span class="btn btn-sm btn-danger">Review</span>
+</a>
+{% endif %}
+
+{# ---------------- KPIs ---------------- #}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-xl-3"><a class="kpi-link" href="{% url 'emergencies' %}"><div class="card kpi">
+    <div class="kpi-top"><span class="kpi-label">Active emergencies</span><span class="kpi-chip red" aria-hidden="true"><i class="bi bi-broadcast"></i></span></div>
+    <div class="kpi-value">{{ stats.active }}</div>
+    <div class="kpi-foot"><span class="kpi-note">{% if stats.critical %}<span class="text-danger fw-semibold">{{ stats.critical }} critical</span>{% else %}0 critical{% endif %} · {{ stats.pending }} waiting</span>
+      <div class="spark-box-sm"><canvas data-spark="{{ charts.spark.emergencies }}" data-color="#ef4444" aria-hidden="true"></canvas></div></div>
+  </div></a></div>
+  {% if show_tests %}
+  <div class="col-6 col-xl-3"><a class="kpi-link" href="{% url 'test_requests' %}"><div class="card kpi">
+    <div class="kpi-top"><span class="kpi-label">Test requests</span><span class="kpi-chip amber" aria-hidden="true"><i class="bi bi-clipboard2-pulse"></i></span></div>
+    <div class="kpi-value">{{ tests_pending|length }}<small>new</small></div>
+    <div class="kpi-foot"><span class="kpi-note">{{ tests_running|length }} running · {{ tests_done_today }} done today</span>
+      <div class="spark-box-sm"><canvas data-spark="{{ charts.spark.tests }}" data-color="#f59e0b" aria-hidden="true"></canvas></div></div>
+  </div></a></div>
+  {% else %}
+  <div class="col-6 col-xl-3"><a class="kpi-link" href="{% url 'emergencies' %}?status=completed"><div class="card kpi">
+    <div class="kpi-top"><span class="kpi-label">Completed</span><span class="kpi-chip" aria-hidden="true"><i class="bi bi-check2-circle"></i></span></div>
+    <div class="kpi-value">{{ stats.completed }}</div>
+    <div class="kpi-foot"><span class="kpi-note">of {{ stats.total }} total</span></div>
+  </div></a></div>
+  {% endif %}
+  <div class="col-6 col-xl-3"><a class="kpi-link" href="{% url 'vitals_alerts' %}"><div class="card kpi">
+    <div class="kpi-top"><span class="kpi-label">Vital-sign alerts</span><span class="kpi-chip red" aria-hidden="true"><i class="bi bi-heart-pulse"></i></span></div>
+    <div class="kpi-value">{{ vital_alert_count }}<small>open</small></div>
+    <div class="kpi-foot"><span class="kpi-note">last 14 days</span>
+      <div class="spark-box-sm"><canvas data-spark="{{ charts.spark.alerts }}" data-color="#a78bfa" aria-hidden="true"></canvas></div></div>
+  </div></a></div>
+  {% if user.role != 'hospital' %}
+  <div class="col-6 col-xl-3"><a class="kpi-link" href="{% url 'ambulances' %}"><div class="card kpi">
+    <div class="kpi-top"><span class="kpi-label">Ambulances free</span><span class="kpi-chip blue" aria-hidden="true"><i class="bi bi-truck-front"></i></span></div>
+    <div class="kpi-value">{{ stats.amb_free }}<small>/ {{ stats.amb_free|add:stats.amb_busy }}</small></div>
+    <div class="kpi-foot w-100 d-block"><span class="kpi-note">{{ stats.amb_busy }} on duty</span>
+      <div class="batt mt-1" role="img" aria-label="{{ stats.amb_free }} of {{ stats.amb_free|add:stats.amb_busy }} available"><span style="width:{% widthratio stats.amb_free stats.amb_free|add:stats.amb_busy|default:1 100 %}%"></span></div></div>
+  </div></a></div>
+  {% else %}
+  <div class="col-6 col-xl-3"><div class="card kpi">
+    <div class="kpi-top"><span class="kpi-label">Incoming now</span><span class="kpi-chip blue" aria-hidden="true"><i class="bi bi-truck-front"></i></span></div>
+    <div class="kpi-value">{{ stats.active }}</div><div class="kpi-foot"><span class="kpi-note">to your hospital</span></div>
+  </div></div>
+  {% endif %}
+</div>
+
+{# ---------------- charts ---------------- #}
+<div class="row g-3 mb-3">
+  <div class="col-lg-8"><section class="card h-100" aria-labelledby="trend-title">
+    <div class="card-header d-flex justify-content-between"><h2 class="h6 mb-0" id="trend-title">Emergencies · last 14 days</h2><span class="small text-muted">{{ stats.total }} total</span></div>
+    <div class="card-body" style="height:250px"><canvas id="ch-trend" role="img" aria-label="Bar chart of new emergencies per day for the last 14 days"></canvas></div></section></div>
+  <div class="col-lg-4"><section class="card h-100" aria-labelledby="status-title">
+    <div class="card-header"><h2 class="h6 mb-0" id="status-title">Status mix</h2></div>
+    <div class="card-body" style="height:250px"><canvas id="ch-status" role="img" aria-label="Doughnut chart of emergencies by status"></canvas></div></section></div>
+</div>
+
+{# ---------------- queues ---------------- #}
+<div class="row g-3 mb-3">
+  <div class="{% if show_tests %}col-xl-7{% else %}col-12{% endif %}"><section class="card h-100" aria-labelledby="q-title">
+    <div class="card-header d-flex justify-content-between align-items-center"><h2 class="h6 mb-0" id="q-title"><i class="bi bi-exclamation-triangle-fill text-danger" aria-hidden="true"></i> Priority queue</h2><a class="small" href="{% url 'emergencies' %}">All</a></div>
+    <div class="table-responsive"><table class="table table-hover align-middle mb-0 queue">
+      <thead><tr><th scope="col">Emergency</th><th scope="col">Priority</th><th scope="col">Status</th><th scope="col">Waiting</th></tr></thead><tbody>
+      {% for e in attention %}<tr>
+        <td><span class="sev-bar" style="background:{% if e.priority == 'critical' %}#ef4444{% elif e.priority == 'high' %}#f97316{% else %}#eab308{% endif %}" aria-hidden="true"></span><a class="fw-semibold" href="{% url 'emergency_detail' e.id %}">{{ e.reference }}</a>{% if e.is_simulated %} <span class="badge badge-sim">sim</span>{% endif %}<span class="d-block small text-muted ms-3">{{ e.get_emergency_type_display }}</span></td>
+        <td><span class="badge prio-{{ e.priority }}">{{ e.get_priority_display }}</span></td>
+        <td><span class="status-pill {% if e.status == 'pending' %}danger{% else %}warning{% endif %}">{{ e.get_status_display }}</span></td>
+        <td class="small text-muted text-nowrap">{{ e.created_at|timesince }}</td></tr>
+      {% empty %}<tr><td colspan="4"><div class="empty"><i class="bi bi-check2-circle" aria-hidden="true"></i>Nothing urgent</div></td></tr>{% endfor %}
+    </tbody></table></div></section></div>
+
+  {% if show_tests %}
+  <div class="col-xl-5"><section class="card h-100" aria-labelledby="tests-title">
+    <div class="card-header d-flex justify-content-between align-items-center"><h2 class="h6 mb-0" id="tests-title"><i class="bi bi-clipboard2-pulse" aria-hidden="true"></i> Test queue</h2><a class="small" href="{% url 'test_requests' %}">All</a></div>
+    <ul class="list-group list-group-flush list-compact">
+    {% for r in tests_pending %}<li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+      <span class="text-truncate"><span class="dot text-warning pulse" aria-hidden="true"></span><a class="fw-semibold" href="{% url 'test_request_detail' r.reference %}">{{ r.patient.get_full_name|default:r.patient.username }}</a>
+        <span class="d-block small text-muted">{{ r.test_names }} · {{ r.requested_at|timesince }}</span></span>
+      <form method="post" action="{% url 'test_request_action' r.reference %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'dashboard' %}"><button name="action" value="accept" class="btn btn-sm btn-success"><i class="bi bi-check2" aria-hidden="true"></i> Accept<span class="visually-hidden"> {{ r.patient.get_full_name|default:r.patient.username }}</span></button></form></li>
+    {% endfor %}
+    {% for r in tests_running %}<li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+      <span class="text-truncate"><span class="dot {% if r.session.status == 'paused' %}text-warning{% else %}text-success pulse{% endif %}" aria-hidden="true"></span><a class="fw-semibold" href="{% url 'test_request_detail' r.reference %}">{{ r.patient.get_full_name|default:r.patient.username }}</a>
+        <span class="d-block small text-muted">{{ r.test_names }} · {% if r.status == 'accepted' %}accepted{% elif r.session.status == 'paused' %}paused{% else %}measuring{% endif %}</span></span>
+      <span class="d-flex gap-1">
+        {% if r.status == 'accepted' %}<a class="btn btn-sm btn-primary" href="{% url 'test_request_detail' r.reference %}#start"><i class="bi bi-play-fill" aria-hidden="true"></i> Start</a>
+        {% else %}<a class="btn btn-sm btn-light" href="{% url 'sim_panel' r.session.id %}" title="Live view"><i class="bi bi-broadcast-pin" aria-hidden="true"></i><span class="visually-hidden">Live view</span></a>
+          <form method="post" action="{% url 'test_request_action' r.reference %}" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="next" value="{% url 'dashboard' %}">
+            {% if r.session.status == 'paused' %}<button name="action" value="resume" class="btn btn-sm btn-outline-primary"><i class="bi bi-play-fill" aria-hidden="true"></i><span class="visually-hidden">Resume</span></button>
+            {% else %}<button name="action" value="pause" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pause-fill" aria-hidden="true"></i><span class="visually-hidden">Pause</span></button>{% endif %}
+            <button name="action" value="complete" class="btn btn-sm btn-success"><i class="bi bi-check2-all" aria-hidden="true"></i> Done</button></form>{% endif %}
+      </span></li>
+    {% endfor %}
+    {% if not tests_pending and not tests_running %}<li class="list-group-item"><div class="empty"><i class="bi bi-inbox" aria-hidden="true"></i>No test requests</div></li>{% endif %}
+    </ul></section></div>
+  {% endif %}
+</div>
+
+{# ---------------- map + activity ---------------- #}
+<div class="row g-3">
+  <div class="col-lg-8"><section class="card p-2 h-100" aria-labelledby="map-title">
+    <h2 class="visually-hidden" id="map-title">Live map</h2>
+    <div id="map" class="map" role="application" aria-label="Map of active emergencies, hospitals and ambulances. The same items are listed in the queue above."></div>
+    <div class="small text-muted px-2 pt-2 d-flex flex-wrap gap-3">
+      <span><span class="dot" style="color:#ef4444" aria-hidden="true"></span>Emergency</span><span><span class="dot" style="color:#6ea8ff" aria-hidden="true"></span>Hospital</span>
+      {% if user.role != 'hospital' %}<span><span class="dot" style="color:#22c55e" aria-hidden="true"></span>Ambulance free</span><span><span class="dot" style="color:#f97316" aria-hidden="true"></span>Ambulance busy</span>{% endif %}
+      <span>Positions simulated unless live GPS</span></div>
+  </section></div>
+  <div class="col-lg-4"><section class="card h-100" aria-labelledby="act-title">
+    <div class="card-header d-flex justify-content-between"><h2 class="h6 mb-0" id="act-title">Recent activity</h2>{% if user.role != 'hospital' %}<a class="small" href="{% url 'activity_log' %}">All</a>{% endif %}</div>
+    <div class="card-body"><ul class="timeline mb-0">
+      {% for l in activity|slice:":7" %}<li class="small"><a href="{% url 'emergency_detail' l.emergency_id %}" class="fw-semibold">{{ l.emergency.reference }}</a> · {{ l.status }}<br><span class="text-muted">{{ l.at|timesince }}{% if l.by %} · {{ l.by.username }}{% endif %}</span></li>
+      {% empty %}<li class="small text-muted">No activity yet.</li>{% endfor %}
+    </ul></div></section></div>
+</div>
+
+{% if user.is_admin_role %}
+<div class="d-flex flex-wrap gap-2 mt-3 small">
+  <a class="status-pill secondary" href="{% url 'hospital_list' %}"><i class="bi bi-hospital" aria-hidden="true"></i> {{ stats.hospitals }} hospitals</a>
+  <a class="status-pill secondary" href="{% url 'patient_list' %}"><i class="bi bi-people" aria-hidden="true"></i> {{ stats.patients }} patients</a>
+  <a class="status-pill {% if stats.pending_approvals %}danger{% else %}secondary{% endif %}" href="{% url 'approvals' %}"><i class="bi bi-person-badge" aria-hidden="true"></i> {{ stats.professionals }} professionals{% if stats.pending_approvals %} · {{ stats.pending_approvals }} to approve{% endif %}</a>
+</div>
+{% endif %}
+{{ charts|json_script:"chart-data" }}
+{% endblock %}
+{% block scripts %}
+<script>
+const C = JSON.parse(document.getElementById('chart-data').textContent);
+if (window.Chart) {
+  const tc = document.getElementById('ch-trend');
+  if (C.trend.data.some(v => v)) new Chart(tc, {type: 'bar', data: {labels: C.trend.labels, datasets: [{label: 'New emergencies', data: C.trend.data, backgroundColor: '#6ea8ff', borderRadius: 6, maxBarThickness: 26}]},
+    options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true, ticks: {precision: 0}}, x: {grid: {display: false}}}}});
+  else tc.replaceWith(Object.assign(document.createElement('div'), {className: 'empty', textContent: 'No emergencies in the last 14 days'}));
+  App.chart('ch-status', 'doughnut', C.status.labels, C.status.data);
+}
+const map = App.tiles(L.map('map').setView([-1.9536, 30.0606], 12));
+{% for h in hospitals %}L.circleMarker([{{ h.latitude }}, {{ h.longitude }}], {radius: 6, color: '#6ea8ff', fillOpacity: .9}).addTo(map).bindPopup("<b>{{ h.name|escapejs }}</b><br>Beds {{ h.available_beds }} · ICU {{ h.icu_available }}{% if not h.capacity_verified %} (unverified){% endif %}");
+{% endfor %}
+{% if user.role != 'hospital' %}{% for a in ambulances %}L.circleMarker([{{ a.latitude }}, {{ a.longitude }}], {radius: 6, color: '{% if a.status == "available" %}#22c55e{% elif a.status == "offline" %}#94a3b8{% else %}#f97316{% endif %}', fillOpacity: .9}).addTo(map).bindPopup("{{ a.plate_number|escapejs }} - {{ a.simple_status|escapejs }}{% if a.location_is_simulated %} (simulated position){% else %} (live GPS){% endif %}");
+{% endfor %}{% endif %}
+{% for e in active %}L.circleMarker([{{ e.latitude }}, {{ e.longitude }}], {radius: 9, color: '#ef4444', fillOpacity: .9}).addTo(map).bindPopup("<a href='{% url 'emergency_detail' e.id %}'>{{ e.reference }}</a> {{ e.get_emergency_type_display|escapejs }} ({{ e.priority }})");
+{% endfor %}
+// Refresh the overview, but never while someone is reading or using the page (keyboard, screen reader, forms).
+let paused = false, lastUse = Date.now();
+['keydown', 'pointerdown', 'focusin', 'scroll'].forEach(ev => addEventListener(ev, () => lastUse = Date.now(), {passive: true}));
+document.getElementById('refresh-toggle').onclick = e => {
+  paused = !paused; e.target.setAttribute('aria-pressed', paused); e.target.textContent = paused ? 'Resume' : 'Pause';
+  document.getElementById('refresh-note').textContent = paused ? 'updates paused' : 'updates every 30 s';
+};
+setInterval(() => {
+  const busy = Date.now() - lastUse < 20000 || document.querySelector('.modal.show') || document.activeElement.closest('form');
+  if (!paused && !busy) location.reload();
+}, 30000);
+</script>
+{% endblock %}

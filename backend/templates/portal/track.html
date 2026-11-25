@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Tracking {{ em.reference }}{% endblock %}
+{% block page_title %}Tracking {{ em.reference }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+  <h2 class="h3 mb-0">Emergency {{ em.reference }} <span class="badge prio-{{ em.priority }}">{{ em.priority }}</span></h2>
+  {% if user.role == 'patient' and em.is_active and em.status in 'pending assigned en_route' %}
+  <form method="post" action="{% url 'cancel_emergency' em.reference %}" data-confirm="Cancel this emergency request? Only do this if you no longer need help.">{% csrf_token %}
+    <button class="btn btn-outline-secondary btn-sm">Cancel request</button></form>
+  {% endif %}
+</div>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card p-2"><div id="map" class="map"></div>
+    <div class="small text-muted px-2 pt-1" id="sim-note"></div></div></div>
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3">
+      <h2 id="status" class="h5 mb-1">{{ em.get_status_display }}</h2>
+      <div id="eta" class="mb-2"></div>
+      <div id="amb" class="small"></div>
+      <div id="hosp" class="small mt-1"></div>
+      {% if user.role == 'patient' and em.is_active %}<a class="btn btn-sm btn-outline-danger mt-2" href="{% url 'vitals_measure' em.reference %}"><i class="bi bi-activity"></i> Send my vital signs to the medical team</a>{% endif %}
+      <div class="small text-muted mt-2">Updates automatically every 5 seconds. Call {{ hotline }} if your condition gets worse.</div>
+    </div>
+    <div class="card"><div class="card-header">Recommended hospitals (AI decision support)</div>
+      <ul class="list-group list-group-flush" id="recs"></ul></div>
+    <div class="card mt-3"><div class="card-header">Timeline</div><ul class="list-unstyled p-3 mb-0 timeline" id="logs"></ul></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const map = App.tiles(L.map('map').setView([{{ em.latitude }}, {{ em.longitude }}], 14));
+L.marker([{{ em.latitude }}, {{ em.longitude }}], {icon: App.icon('bi-person-fill', '#b42318')}).addTo(map).bindPopup('Patient location');
+let ambM = null, hospM = null, line = null, fitted = false;
+async function refresh() {
+  const r = await fetch("{% url 'track_json' em.reference %}", {credentials: 'same-origin'});
+  if (!r.ok) return;
+  const d = await r.json(), E = App.esc;
+  document.getElementById('status').innerText = d.status_display;
+  document.getElementById('eta').innerHTML = d.ambulance && d.eta_minutes != null && ['assigned','en_route'].includes(d.status)
+    ? `<span class="fs-5">ETA ~ <b>${Math.round(d.eta_minutes)}</b> min</span> <span class="small text-muted">(estimate)</span>` : '';
+  document.getElementById('amb').innerHTML = d.ambulance
+    ? `<i class="bi bi-truck-front"></i> Ambulance <b>${E(d.ambulance.plate)}</b> · ${E(d.ambulance.type)} · ${E(d.ambulance.status)}${d.ambulance.phone ? ` · <a href="tel:${E(d.ambulance.phone)}">${E(d.ambulance.phone)}</a>` : ''}`
+    : '<span class="text-warning"><i class="bi bi-hourglass-split"></i> Waiting for an available ambulance. Operators have been alerted.</span>';
+  document.getElementById('hosp').innerHTML = d.hospital ? `<i class="bi bi-hospital"></i> Destination: <b>${E(d.hospital.name)}</b>` : '';
+  document.getElementById('sim-note').innerText = d.ambulance && d.ambulance.simulated ? 'Ambulance position is SIMULATED for this demonstration - not real GPS.' : (d.ambulance ? 'Ambulance position from crew device GPS.' : '');
+  if (d.ambulance) {
+    if (!ambM) ambM = L.marker(d.ambulance.pos, {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map);
+    ambM.setLatLng(d.ambulance.pos);
+    if (line) map.removeLayer(line);
+    line = L.polyline([d.ambulance.pos, d.patient], {color: '#e8590c', dashArray: '6'}).addTo(map);
+  }
+  if (d.hospital && !hospM) hospM = L.marker(d.hospital.pos, {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map).bindPopup(E(d.hospital.name));
+  if (!fitted) { const pts = [d.patient]; if (d.ambulance) pts.push(d.ambulance.pos); if (d.hospital) pts.push(d.hospital.pos);
+    if (pts.length > 1) map.fitBounds(pts, {padding: [40, 40]}); fitted = true; }
+  document.getElementById('recs').innerHTML = (d.recommendations || []).map(h =>
+    `<li class="list-group-item small"><b>${E(h.name)}</b> · ${h.distance_km} km<br><span class="text-muted">${(h.reasons || []).map(E).join(' · ')}</span></li>`).join('')
+    || '<li class="list-group-item small text-muted">No recommendation available (AI unavailable or no hospital in range). Responders will choose.</li>';
+  document.getElementById('logs').innerHTML = d.logs.map(l =>
+    `<li class="mb-2"><b>${E(l.status)}</b> <span class="text-muted small">${new Date(l.at).toLocaleTimeString()}</span><br><span class="small">${E(l.note)}</span></li>`).join('');
+}
+refresh(); setInterval(refresh, 5000);
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Fast help in a medical emergency{% endblock %}
+{% block page_title %}Home{% endblock %}
+{% block content %}
+<section class="hero p-4 p-md-5 mb-5">
+  <div class="row align-items-center g-4">
+    <div class="col-lg-7">
+      <span class="badge bg-light text-primary mb-3"><i class="bi bi-cpu"></i> AI-assisted emergency response</span>
+      <h1 class="fw-bold mb-3">Fast, coordinated help in a medical emergency</h1>
+      <p class="lead mb-4">Request an ambulance in seconds. We find the nearest one and alert the hospital.</p>
+      <div class="d-flex flex-wrap gap-3 align-items-center">
+      {% if user.is_authenticated %}
+        {% if user.role == 'patient' %}
+        <a class="btn btn-danger btn-sos" href="{% url 'request_emergency' %}"><i class="bi bi-exclamation-octagon-fill"></i> Request emergency help</a>
+        {% endif %}
+        <a class="btn btn-light btn-lg" href="{% url 'home' %}">Go to my dashboard</a>
+      {% else %}
+        <a class="btn btn-danger btn-sos" href="{% url 'login' %}?next={% url 'request_emergency' %}"><i class="bi bi-exclamation-octagon-fill"></i> Request emergency help</a>
+        <a class="btn btn-outline-light btn-lg" href="{% url 'register' %}">Create an account</a>
+      {% endif %}
+      </div>
+      <p class="mt-4 mb-0 small text-white-50"><i class="bi bi-telephone-fill text-danger"></i> Life-threatening? Call <b class="text-white">{{ hotline }}</b> straight away - this system never replaces that call.</p>
+    </div>
+    <div class="col-lg-5">
+      <div class="row g-3">
+        <div class="col-6"><div class="card stat"><div class="stat-icon"><i class="bi bi-hospital"></i></div><div><div class="stat-num">{{ hospital_count }}</div><small>Registered hospitals</small></div></div></div>
+        <div class="col-6"><div class="card stat"><div class="stat-icon green"><i class="bi bi-truck-front"></i></div><div><div class="stat-num">{{ ambulance_free }}</div><small>Ambulances available now</small></div></div></div>
+        <div class="col-12"><div class="card p-3 small"><i class="bi bi-shield-lock text-primary"></i> Your location is only shared when you allow it, and only with the team handling your emergency.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="services" class="mb-5">
+  <h2 class="h3 text-center mb-1">Our services</h2>
+  
+  <div class="row g-3">
+    {% for icon, title, text in services %}
+    <div class="col-sm-6 col-lg-4"><div class="card p-4 h-100"><div class="feature-icon"><i class="bi {{ icon }}"></i></div><h3 class="h5">{{ title }}</h3><p class="mb-0 text-muted small">{{ text }}</p></div></div>
+    {% endfor %}
+  </div>
+</section>
+
+<section id="how" class="mb-5">
+  <h2 class="h3 text-center mb-4">How it works</h2>
+  <div class="row g-3 text-center">
+    <div class="col-6 col-lg-3"><div class="card p-3 h-100"><div class="step-num">1</div><h3 class="h6">Request help</h3><p class="small text-muted mb-0">Share your location.</p></div></div>
+    <div class="col-6 col-lg-3"><div class="card p-3 h-100"><div class="step-num">2</div><h3 class="h6">AI prioritises</h3><p class="small text-muted mb-0">Priority and best hospital, explained to staff.</p></div></div>
+    <div class="col-6 col-lg-3"><div class="card p-3 h-100"><div class="step-num">3</div><h3 class="h6">Ambulance dispatched</h3><p class="small text-muted mb-0">Nearest ambulance is on its way.</p></div></div>
+    <div class="col-6 col-lg-3"><div class="card p-3 h-100"><div class="step-num">4</div><h3 class="h6">Hospital ready</h3><p class="small text-muted mb-0">Hospital is alerted in advance.</p></div></div>
+  </div>
+</section>
+
+<section class="mb-5">
+  <div class="row g-3 align-items-stretch">
+    <div class="col-lg-6"><div class="card p-4 h-100">
+      <h3 class="h4"><i class="bi bi-journal-medical text-primary"></i> Health information</h3>
+      <p class="text-muted">Read about common diseases and emergencies - causes, symptoms, prevention and the warning signs that mean you need help now. Every entry links to its WHO or NHS source.</p>
+      <div><a class="btn btn-outline-primary" href="{% url 'disease_list' %}">Browse medical information</a></div>
+    </div></div>
+    <div class="col-lg-6"><div class="card p-4 h-100">
+      <h3 class="h4"><i class="bi bi-chat-square-heart text-primary"></i> AI medical assistant</h3>
+      <p class="text-muted">Ask general first-aid and health questions. Answers come only from trusted public sources, are shown with their references, and warn you when your question sounds like an emergency.</p>
+      <div><a class="btn btn-outline-primary" href="{% url 'assistant' %}">Ask the assistant</a></div>
+    </div></div>
+  </div>
+</section>
+
+<section id="contact" class="mb-2">
+  <div class="card p-4">
+    <div class="row g-3">
+      <div class="col-md-4"><h3 class="h5"><i class="bi bi-telephone text-danger"></i> Emergency</h3><p class="mb-0">Call <b>{{ hotline }}</b> any time for life-threatening emergencies.</p></div>
+      <div class="col-md-4"><h3 class="h5"><i class="bi bi-person-plus text-primary"></i> Patients</h3><p class="mb-0"><a href="{% url 'register' %}">Create a patient account</a> to request help and keep your medical profile ready.</p></div>
+      <div class="col-md-4"><h3 class="h5"><i class="bi bi-hospital text-primary"></i> Health professionals</h3><p class="mb-0"><a href="{% url 'register_professional' %}">Register as a healthcare professional</a> - accounts are verified by an administrator.</p></div>
+    </div>
+  </div>
+</section>
+{% endblock %}

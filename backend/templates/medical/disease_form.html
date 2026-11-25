@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}{% if d %}Edit {{ d.name }}{% else %}New medical information entry{% endif %}{% endblock %}
+{% block page_title %}Medical information{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>{% if d %}Edit {{ d.name }}{% else %}New entry{% endif %}</h1>
+  <p class="subtitle">Summarise a trusted source and link to it. Saving returns the entry to <b>pending review</b> - it is hidden from patients until approved.</p></div>
+  <a class="btn btn-light" href="{% if d %}{% url 'disease_detail' d.slug %}{% else %}{% url 'disease_list' %}{% endif %}"><i class="bi bi-arrow-left"></i> Back</a></div>
+<form method="post" class="card p-3 p-md-4" novalidate>{% csrf_token %}
+  <div class="row g-2">
+    <div class="col-md-6">{% include "_field.html" with f=form.name %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.category %}</div>
+    <div class="col-12">{% include "_field.html" with f=form.description %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.causes %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.symptoms %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.risk_factors %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.diagnosis %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.treatment %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.prevention %}</div>
+    <div class="col-12">{% include "_field.html" with f=form.warning_signs %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.source_name %}</div>
+    <div class="col-md-6">{% include "_field.html" with f=form.source_url %}</div>
+  </div>
+  <div><button class="btn btn-primary"><i class="bi bi-check-lg"></i> Save (pending review)</button></div>
+</form>
+{% endblock %}

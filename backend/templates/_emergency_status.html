@@ -1,0 +1,9 @@
+{% load i18n %}{# Plain-language emergency status. Param: s (status code) #}
+{% if s == 'pending' %}{% translate "We received your request. We are finding the nearest available ambulance." %}
+{% elif s == 'assigned' %}{% translate "An ambulance has been chosen for you. The crew is being alerted." %}
+{% elif s == 'en_route' %}{% translate "The ambulance is on its way to you." %}
+{% elif s == 'on_scene' %}{% translate "The ambulance crew has arrived." %}
+{% elif s == 'transporting' %}{% translate "You are being taken to the hospital." %}
+{% elif s == 'arrived' %}{% translate "You have arrived at the hospital." %}
+{% elif s == 'completed' %}{% translate "This emergency is closed." %}
+{% elif s == 'cancelled' %}{% translate "This emergency request was cancelled." %}{% endif %}

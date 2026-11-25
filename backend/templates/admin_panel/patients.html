@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Patients{% endblock %}
+{% block page_title %}Patients{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>Patients</h1><p class="subtitle"><i class="bi bi-lock"></i> Personal medical data - visible to administrators and emergency operators only.</p></div></div>
+<form class="card p-3 mb-3" method="get"><div class="row g-2 align-items-end">
+  <div class="col-md-10"><label class="form-label" for="q">Search patients</label><input class="form-control" id="q" name="q" value="{{ q }}" placeholder="Name, username or phone"></div>
+  <div class="col-md-2 d-grid"><button class="btn btn-navy"><i class="bi bi-search"></i> Search</button></div>
+</div></form>
+<div class="card"><div class="table-responsive"><table class="table table-hover align-middle">
+  <thead><tr><th>Patient</th><th>Phone</th><th>Age / gender</th><th>Blood group</th><th>Emergencies</th><th>State</th></tr></thead><tbody>
+  {% for p in page %}{% with pr=p.patient_profile %}<tr class="clickable" onclick="location='{% url 'patient_detail' p.id %}'">
+    <td><b>{{ p.get_full_name|default:p.username }}</b><br><small class="text-muted">{{ p.username }}</small></td>
+    <td class="small">{{ p.phone|default:"-" }}</td>
+    <td class="small">{{ pr.age|default:"-" }} / {{ pr.gender|default:"-" }}</td>
+    <td class="small">{{ pr.blood_group|default:"-" }}</td>
+    <td>{{ p.n_emergencies }}</td>
+    <td>{% if p.is_active %}<span class="status-pill success">Active</span>{% else %}<span class="status-pill secondary">Deactivated</span>{% endif %}</td>
+  </tr>{% endwith %}{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No patients found.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "portal/_pager.html" %}
+{% endblock %}

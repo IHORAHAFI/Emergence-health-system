@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Activity log{% endblock %}
+{% block page_title %}Activity log{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>Activity log</h1><p class="subtitle">Read-only records of what happened in the system and who did it.</p></div></div>
+<ul class="nav nav-pills mb-3 gap-1">
+  <li class="nav-item"><a class="nav-link {% if tab == 'emergency' %}active{% endif %}" href="?tab=emergency"><i class="bi bi-clipboard2-pulse"></i> Emergency activity</a></li>
+  <li class="nav-item"><a class="nav-link {% if tab == 'notifications' %}active{% endif %}" href="?tab=notifications"><i class="bi bi-bell"></i> Notifications sent</a></li>
+  <li class="nav-item"><a class="nav-link {% if tab == 'access' %}active{% endif %}" href="?tab=access"><i class="bi bi-shield-lock"></i> Medical data access</a></li>
+</ul>
+{% if tab == 'notifications' %}
+<div class="d-flex flex-wrap gap-2 mb-2">
+  <a class="btn btn-sm {% if not request.GET.status %}btn-navy{% else %}btn-light{% endif %}" href="?tab=notifications">All</a>
+  <a class="btn btn-sm {% if request.GET.status == 'sent' %}btn-navy{% else %}btn-light{% endif %}" href="?tab=notifications&status=sent">Sent</a>
+  <a class="btn btn-sm {% if request.GET.status == 'simulated' %}btn-navy{% else %}btn-light{% endif %}" href="?tab=notifications&status=simulated">Simulated</a>
+  <a class="btn btn-sm {% if request.GET.status == 'not_configured' %}btn-navy{% else %}btn-light{% endif %}" href="?tab=notifications&status=not_configured">Not configured</a>
+  <a class="btn btn-sm {% if request.GET.status == 'failed' %}btn-navy{% else %}btn-light{% endif %}" href="?tab=notifications&status=failed">Failed</a>
+</div>
+{% endif %}
+<div class="card"><div class="table-responsive"><table class="table table-sm align-middle">
+{% if tab == 'access' %}
+  <thead><tr><th>When</th><th>User</th><th>Action</th><th>Emergency</th><th>Detail</th><th>IP</th></tr></thead><tbody>
+  {% for a in page %}<tr class="small"><td class="text-nowrap">{{ a.at|date:"d M Y H:i" }}</td><td>{{ a.user.username|default:"-" }}</td><td>{{ a.action }}</td><td>{% if a.emergency %}<a href="{% url 'emergency_detail' a.emergency_id %}">{{ a.emergency.reference }}</a>{% endif %}</td><td>{{ a.detail }}</td><td>{{ a.ip_address|default:"" }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No access records.</td></tr>{% endfor %}
+{% elif tab == 'notifications' %}
+  <thead><tr><th>When</th><th>To</th><th>Channel</th><th>Delivery</th><th>Title</th><th>Emergency</th></tr></thead><tbody>
+  {% for n in page %}<tr class="small"><td class="text-nowrap">{{ n.created_at|date:"d M Y H:i" }}</td><td>{% if n.recipient %}{{ n.recipient.username }}{% elif n.hospital %}{{ n.hospital.name }}{% else %}{{ n.destination|default:"-" }}{% endif %}</td><td>{{ n.channel }}</td>
+    <td><span class="status-pill {% if n.delivery_status == 'sent' %}success{% elif n.delivery_status == 'failed' %}danger{% elif n.delivery_status == 'simulated' %}secondary{% else %}warning{% endif %}">{{ n.delivery_status }}</span>{% if n.error %}<br><span class="text-danger">{{ n.error|truncatechars:60 }}</span>{% endif %}</td>
+    <td>{{ n.title|truncatechars:70 }}</td><td>{% if n.emergency %}<a href="{% url 'emergency_detail' n.emergency_id %}">{{ n.emergency.reference }}</a>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No notifications.</td></tr>{% endfor %}
+{% else %}
+  <thead><tr><th>When</th><th>Emergency</th><th>Status</th><th>Note</th><th>By</th></tr></thead><tbody>
+  {% for l in page %}<tr class="small"><td class="text-nowrap">{{ l.at|date:"d M Y H:i" }}</td><td><a href="{% url 'emergency_detail' l.emergency_id %}">{{ l.emergency.reference }}</a></td><td>{{ l.status }}</td><td>{{ l.note }}</td><td>{{ l.by.username|default:"system" }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No activity yet.</td></tr>{% endfor %}
+{% endif %}
+</tbody></table></div></div>
+{% include "portal/_pager.html" %}
+{% endblock %}

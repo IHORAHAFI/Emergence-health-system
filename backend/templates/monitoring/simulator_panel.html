@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Simulation {{ s.id }}{% endblock %}
+{% block page_title %}Virtual patient simulator{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  {% if req %}
+  <div><h1>IoT test {{ req.reference }} <span class="badge badge-sim align-middle">SIMULATED</span></h1>
+    <p class="subtitle">{{ req.test_names }} · condition: {{ scenario.label }} · results go only to {{ req.patient.get_full_name|default:req.patient.username }} ({{ req.patient_code }})</p></div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-light" href="{% url 'test_request_detail' req.reference %}"><i class="bi bi-arrow-left"></i> Request</a>
+    <form method="post" action="{% url 'test_request_action' req.reference %}">{% csrf_token %}<button name="action" value="complete" class="btn btn-success" id="btn-complete"><i class="bi bi-clipboard2-check"></i> Complete test &amp; send results</button></form>
+  </div>
+  {% else %}
+  <div><h2 class="h3">Simulation #{{ s.id }} <span class="badge badge-sim align-middle">SIMULATED</span></h2>
+    <p class="subtitle">{{ scenario.label }} · emergency <a href="{% url 'emergency_detail' s.emergency.id %}">{{ s.emergency.reference }}</a> · <a href="{% url 'vitals_detail' s.emergency.reference %}">open clinical vital-signs view</a></p></div>
+  <a class="btn btn-light" href="{% url 'simulator' %}"><i class="bi bi-arrow-left"></i> All simulations</a>
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-4">
+    <div class="card p-3 h-100">
+      {% if req %}
+      <div class="section-title">Patient (from test request - cannot be changed here)</div>
+      <h2 class="h5 mb-1">{{ req.patient.get_full_name|default:req.patient.username }}</h2>
+      <p class="small text-muted mb-2">{{ req.patient_code }}{% with pr=req.patient.patient_profile %}{% if pr %} · {{ pr.age|default:"?" }} y · {{ pr.gender|default:"-" }}{% endif %}{% endwith %}</p>
+      <p class="small mb-1"><b>Request:</b> {{ req.reference }} · <span id="req-status">{{ req.status_short }}</span></p>
+      <p class="small mb-1"><b>Tests:</b> {{ req.test_names }}</p>
+      <p class="small mb-0"><b>Simulated condition:</b> {{ scenario.description }}</p>
+      {% else %}
+      <div class="section-title">Virtual patient</div>
+      <h2 class="h5 mb-1">{{ vp.full_name }}</h2>
+      <p class="small text-muted mb-2">{{ vp.patient_code }} · {{ vp.age }} y · {{ vp.get_gender_display }}{% if vp.weight_kg %} · {{ vp.weight_kg }} kg{% endif %}{% if vp.height_cm %} · {{ vp.height_cm }} cm{% endif %}{% if vp.bmi %} · BMI {{ vp.bmi }}{% endif %}</p>
+      <p class="small mb-1"><b>History:</b> {{ vp.medical_history|default:"none recorded" }}</p>
+      <p class="small mb-0"><b>Scenario:</b> {{ scenario.description }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card p-3 h-100">
+      <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <div><div class="section-title mb-0">Status</div><span id="st" class="status-pill secondary fs-6">-</span></div>
+        <div><div class="section-title mb-0">Simulated time</div><b class="fs-5" id="step">0</b> min</div>
+        <div><div class="section-title mb-0">Speed</div>
+          <select id="speed" class="form-select form-select-sm" style="width:auto"><option value="0.5">0.5x</option><option value="1">1x</option><option value="2">2x</option><option value="5">5x</option><option value="10">10x</option></select></div>
+        <div class="ms-auto small text-muted" id="conn"></div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-success ctl" data-a="start"><i class="bi bi-play-fill"></i> Start</button>
+        <button class="btn btn-warning ctl" data-a="pause"><i class="bi bi-pause-fill"></i> Pause</button>
+        <button class="btn btn-primary ctl" data-a="resume"><i class="bi bi-play"></i> Resume</button>
+        <button class="btn btn-outline-danger ctl" data-a="stop"><i class="bi bi-stop-fill"></i> Stop</button>
+        <button class="btn btn-light ctl" data-a="reset"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+      </div>
+      <div id="msg" class="small text-danger mt-2"></div>
+    </div>
+  </div>
+</div>
+
+<div id="alert-box" class="alert alert-danger d-none"></div>
+<div class="row g-3 mb-3" id="cards">
+  {% for k, label in vital_labels %}
+  <div class="col-6 col-md-4 col-xl-2"><div class="card p-3 h-100" id="card-{{ k }}">
+    <div class="small text-muted">{{ label }}</div>
+    <div class="fs-3 fw-bold" data-v>-</div>
+    <div class="small" data-src>no data</div>
+    <span class="status-pill secondary mt-1" data-flag>-</span>
+  </div></div>
+  {% endfor %}
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 mb-0"><i class="bi bi-broadcast-pin" aria-hidden="true"></i> IoT devices</h2><span class="badge badge-sim">SIMULATED</span></div>
+<div class="vitals-grid mb-3" id="devices" aria-live="off"></div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Heart rate · SpO₂ · respiration</div><div class="card-body" style="height:250px"><canvas id="ch1"></canvas></div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Blood pressure (mmHg)</div><div class="card-body" style="height:250px"><canvas id="ch2"></canvas></div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Temperature (°C)</div><div class="card-body" style="height:250px"><canvas id="ch3"></canvas></div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card"><div class="card-header">Transmitted measurements (stored in the database)</div>
+    <div class="table-responsive" style="max-height:360px"><table class="table table-sm"><thead><tr><th>Time</th><th>Device</th><th>Values</th><th>NEWS2</th></tr></thead><tbody id="readings"></tbody></table></div></div></div>
+  <div class="col-lg-5"><div class="card"><div class="card-header">Event log</div>
+    <ul class="list-group list-group-flush small" id="events" style="max-height:360px;overflow-y:auto"></ul></div></div>
+</div>
+{{ state_json|json_script:"initial-state" }}
+{% endblock %}
+{% block scripts %}
+<script>
+const URLS = {tick: "{% url 'sim_tick' s.id %}", control: "{% url 'sim_control' s.id %}", device: "{% url 'sim_device' s.id 0 %}".replace(/0\/$/, '')};
+const E = App.esc, LABEL = {temperature_c: 'Temp', heart_rate_bpm: 'HR', spo2_pct: 'SpO₂', systolic_mmhg: 'Sys', diastolic_mmhg: 'Dia', respiratory_rate: 'RR'};
+const PNAME = {temperature_c: 'Temperature', heart_rate_bpm: 'Heart rate', spo2_pct: 'Oxygen saturation (SpO2)', systolic_mmhg: 'Systolic blood pressure', diastolic_mmhg: 'Diastolic blood pressure', respiratory_rate: 'Respiratory rate'};
+let S = JSON.parse(document.getElementById('initial-state').textContent), busy = false, failures = 0;
+
+async function call(url, body) {
+  const r = await fetch(url, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRFToken': App.csrf()}, body: JSON.stringify(body || {})});
+  const d = await r.json().catch(() => ({detail: 'Server error'}));
+  if (!r.ok) throw new Error(d.detail || 'Request failed');
+  return d;
+}
+const line = (id, sets, opts = {}) => new Chart(document.getElementById(id), {type: 'line', data: {labels: [], datasets: sets.map(([label, color]) => ({label, data: [], borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, tension: .3, spanGaps: true}))},
+  options: {animation: false, responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'bottom', labels: {boxWidth: 10, font: {size: 11}}}}, scales: {x: {ticks: {maxTicksLimit: 6}}, y: opts.y || {}}}});
+const charts = {
+  ch1: line('ch1', [['Heart rate', '#c62828'], ['SpO₂ %', '#1d6fd8'], ['Resp. rate', '#18794e']]),
+  ch2: line('ch2', [['Systolic', '#0b2545'], ['Diastolic', '#7c3aed']]),
+  ch3: line('ch3', [['Temperature', '#e8590c']]),
+};
+const FIELDS = {ch1: ['heart_rate_bpm', 'spo2_pct', 'respiratory_rate'], ch2: ['systolic_mmhg', 'diastolic_mmhg'], ch3: ['temperature_c']};
+
+function render(d) {
+  S = d;
+  const st = document.getElementById('st');
+  st.textContent = d.status_display; st.className = 'status-pill fs-6 ' + ({running: 'success', paused: 'warning', stopped: 'danger'}[d.status] || 'secondary');
+  document.getElementById('step').textContent = d.step;
+  document.getElementById('speed').value = String(d.speed);
+  if (d.test_status && document.getElementById('req-status')) document.getElementById('req-status').textContent = d.test_status;
+  const closed = d.test_status && d.test_status !== 'testing';
+  if (closed) {
+    const bc = document.getElementById('btn-complete'); if (bc) bc.disabled = true;
+    document.getElementById('msg').textContent = `Request is ${d.test_status} - no further measurements are generated.`;
+  }
+  const can = {start: d.status === 'ready', pause: d.status === 'running', resume: d.status === 'paused', stop: d.status !== 'stopped', reset: true};
+  document.querySelectorAll('.ctl').forEach(b => b.disabled = closed || !can[b.dataset.a]);
+
+  // latest value per field = most recent stored reading containing it
+  const latest = {};
+  for (const r of d.readings) for (const k of Object.keys(LABEL)) if (r[k] != null && !latest[k]) latest[k] = r;
+  for (const k of Object.keys(LABEL)) {
+    const c = document.getElementById('card-' + k), r = latest[k];
+    if (!r) continue;
+    const lim = (r.flags || {})[k];
+    const abn = r.alerts.find(a => a.parameter === PNAME[k]) || (lim ? {severity: 'amber'} : null);
+    c.querySelector('[data-v]').innerHTML = `${E(r[k])}<small class="fs-6 text-muted"> ${E(d.units[k])}</small>`;
+    c.querySelector('[data-src]').innerHTML = `${E(r.device)} · ${new Date(r.at).toLocaleTimeString()} <span class="badge badge-sim">SIM</span>`;
+    const f = c.querySelector('[data-flag]');
+    f.className = 'status-pill mt-1 ' + (abn ? (abn.severity === 'red' ? 'danger' : 'warning') : 'success');
+    f.textContent = abn ? `Abnormal${lim ? ' (' + lim + ')' : ''}` : 'Normal range';
+    c.classList.toggle('border-danger', !!abn && abn.severity === 'red');
+  }
+
+  const ICON = {thermometer: 'bi-thermometer-half', pulse_oximeter: 'bi-lungs', blood_pressure: 'bi-activity', heart_rate: 'bi-heart-pulse', respiratory: 'bi-wind'};
+  const running = d.status === 'running';
+  document.getElementById('devices').innerHTML = d.devices.map(v => {
+    const st = {connected: running ? ['text-success', 'Receiving data', true] : ['text-success', 'Connected', false], disconnected: ['text-danger', 'Disconnected', false],
+                off: ['text-muted', 'Switched off', false], battery_empty: ['text-danger', 'Battery empty', false]}[v.state];
+    const vals = v.fields.map(k => v.values[k] != null ? `${v.values[k]}<small class="fs-6 text-muted"> ${d.units[k]}</small>` : '').filter(Boolean).join(' / ') || '<span class="text-muted">--</span>';
+    return `<section class="card device" aria-label="${E(v.name)}">
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div class="d-flex gap-2 align-items-center"><span class="kpi-chip" aria-hidden="true"><i class="bi ${ICON[v.kind] || 'bi-cpu'}"></i></span>
+          <div><div class="d-name">${E(v.name)}</div><div class="d-id">${E(v.device_id)} · ${v.every_steps} min</div></div></div>
+      </div>
+      <div class="d-val mt-2">${vals}</div>
+      <div class="small fw-semibold ${st[0]}"><span class="dot${st[2] ? ' pulse' : ''}" aria-hidden="true"></span>${st[1]}</div>
+      <div class="d-flex justify-content-between small text-muted mt-1"><span>${v.last_sent_at ? new Date(v.last_sent_at).toLocaleTimeString() : 'no data yet'}</span><span>${v.transmissions} sent</span></div>
+      <div class="d-flex align-items-center gap-2 mt-1"><div class="batt flex-grow-1 ${v.battery < 20 ? 'low' : ''}" role="img" aria-label="Battery ${v.battery}%"><span style="width:${v.battery}%"></span></div><span class="small text-muted">${v.battery}%</span></div>
+      ${v.error ? `<div class="small text-danger mt-1">${E(v.error)}</div>` : ''}
+      <div class="d-flex gap-1 mt-2 flex-wrap">
+        ${v.connected ? `<button class="btn btn-sm btn-outline-secondary dev" data-id="${v.id}" data-a="disconnect"><i class="bi bi-plug" aria-hidden="true"></i> Disconnect</button>` : `<button class="btn btn-sm btn-outline-primary dev" data-id="${v.id}" data-a="connect"><i class="bi bi-plug-fill" aria-hidden="true"></i> Connect</button>`}
+        ${v.enabled ? `<button class="btn btn-sm btn-light dev" data-id="${v.id}" data-a="disable" title="Switch off"><i class="bi bi-power" aria-hidden="true"></i><span class="visually-hidden">Switch off ${E(v.name)}</span></button>` : `<button class="btn btn-sm btn-light dev" data-id="${v.id}" data-a="enable"><i class="bi bi-power" aria-hidden="true"></i> On</button>`}
+        ${v.battery < 100 ? `<button class="btn btn-sm btn-light dev" data-id="${v.id}" data-a="recharge" title="Recharge"><i class="bi bi-battery-charging" aria-hidden="true"></i><span class="visually-hidden">Recharge ${E(v.name)}</span></button>` : ''}
+      </div></section>`;
+  }).join('');
+
+  if (closed) document.querySelectorAll('.dev').forEach(b => b.disabled = true);
+  const rows = [...d.readings].reverse();
+  for (const [id, ch] of Object.entries(charts)) {
+    const rs = rows.filter(r => FIELDS[id].some(k => r[k] != null));
+    ch.data.labels = rs.map(r => new Date(r.at).toLocaleTimeString());
+    ch.data.datasets.forEach((ds, i) => ds.data = rs.map(r => r[FIELDS[id][i]]));
+    ch.update();
+  }
+  document.getElementById('readings').innerHTML = d.readings.map(r => {
+    const vals = Object.keys(LABEL).filter(k => r[k] != null).map(k => `${LABEL[k]} ${r[k]}${d.units[k]}`).join(' · ');
+    return `<tr class="${r.alerts.length ? 'table-warning' : ''}"><td class="small text-nowrap">${new Date(r.at).toLocaleTimeString()}</td><td class="small">${E(r.device)}<br><span class="text-muted">${E(r.device_id)}</span></td><td class="small">${E(vals)} <span class="badge badge-sim">SIM</span></td><td class="small">${r.news2 ?? '-'}${r.partial ? '*' : ''} ${r.risk ? `<span class="badge risk-${E(r.risk)}">${E(r.risk)}</span>` : ''}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="text-muted text-center py-3">No measurements yet - press Start.</td></tr>';
+  const open = (d.alerts || []).filter(a => a.status === 'open'), box = document.getElementById('alert-box');
+  box.classList.toggle('d-none', !open.length);
+  box.innerHTML = open.length ? `<b><i class="bi bi-exclamation-triangle-fill"></i> ${open.length} open alert${open.length > 1 ? 's' : ''} - the medical team has been notified.</b> <a class="alert-link" href="{% url 'vitals_alerts' %}">Review</a><ul class="mb-0 small">` +
+    open.slice(0, 5).map(a => `<li>${new Date(a.at).toLocaleTimeString()} · ${E(a.message)} · ${E(a.device)}</li>`).join('') + '</ul>' : '';
+  document.getElementById('events').innerHTML = d.events.map(e => `<li class="list-group-item ${({alert: 'list-group-item-danger', warning: 'list-group-item-warning', error: 'list-group-item-danger'})[e.level] || ''}"><span class="text-muted">${new Date(e.at).toLocaleTimeString()} · min ${e.step}</span><br>${E(e.message)}</li>`).join('');
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.ctl, .dev'); if (!b) return;
+  document.getElementById('msg').textContent = '';
+  try {
+    render(b.classList.contains('ctl') ? await call(URLS.control, {action: b.dataset.a}) : await call(`${URLS.device}${b.dataset.id}/`, {action: b.dataset.a}));
+  } catch (err) { document.getElementById('msg').textContent = err.message; }
+});
+document.getElementById('speed').onchange = async e => {
+  try { render(await call(URLS.control, {action: 'speed', speed: e.target.value})); } catch (err) { document.getElementById('msg').textContent = err.message; }
+};
+// The page itself drives the simulation while open (the background command can do it too - steps are never duplicated).
+setInterval(async () => {
+  if (busy || S.status !== 'running') return;
+  busy = true;
+  try { render(await call(URLS.tick)); failures = 0; document.getElementById('conn').innerHTML = '<i class="bi bi-wifi text-success"></i> live'; }
+  catch (err) { failures++; document.getElementById('conn').innerHTML = `<span class="text-danger"><i class="bi bi-wifi-off"></i> server not reachable (${failures})</span>`; }
+  finally { busy = false; }
+}, 1000);
+render(S);
+</script>
+{% endblock %}

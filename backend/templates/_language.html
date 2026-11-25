@@ -1,0 +1,9 @@
+{% load i18n %}{% get_current_language as LANG %}{% get_available_languages as LANGS %}
+<form action="{% url 'set_language' %}" method="post" class="d-flex align-items-center">{% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <label for="lang-{{ forloop.counter|default:'x' }}{{ user.is_authenticated|yesno:'a,p' }}" class="visually-hidden">{% translate "Language" %}</label>
+  <select id="lang-{{ forloop.counter|default:'x' }}{{ user.is_authenticated|yesno:'a,p' }}" name="language" class="form-select form-select-sm lang-select" onchange="this.form.submit()">
+    {% for code, name in LANGS %}<option value="{{ code }}" {% if code == LANG %}selected{% endif %} lang="{{ code }}">{% if code == 'en' %}English{% elif code == 'fr' %}Français{% elif code == 'rw' %}Kinyarwanda{% else %}{{ name }}{% endif %}</option>{% endfor %}
+  </select>
+  <noscript><button class="btn btn-sm btn-light ms-1">{% translate "Change" %}</button></noscript>
+</form>

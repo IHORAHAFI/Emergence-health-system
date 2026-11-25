@@ -1,0 +1,90 @@
+{% load static i18n %}{% get_current_language as LANG %}<!doctype html>
+<html lang="{{ LANG|default:'en' }}"{% if user.is_authenticated %}{% if user.is_superuser or user.role == 'operator' or user.role == 'admin' or user.role == 'hospital' %} data-bs-theme="dark"{% endif %}{% endif %}>
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Smart Medical Emergency{% endblock %} · Smart Medical Emergency</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/design-v2.css' %}">
+  <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="{% static 'img/icon.svg' %}" type="image/svg+xml">
+  {% if user.is_authenticated %}<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>{% endif %}
+  {% block head %}{% endblock %}
+</head>
+<body{% if user.is_authenticated and user.is_superuser or user.role == 'operator' or user.role == 'admin' %} data-operator-feed="{% url 'operator_feed' %}" data-test-requests-url="{% url 'test_requests' %}"{% endif %}>
+<a class="skip-link" href="#main">{% translate "Skip to main content" %}</a>
+{% if user.is_authenticated %}
+<div class="app-shell">
+  {% include "_sidebar.html" %}
+  <div class="sidebar-backdrop" onclick="document.body.classList.remove('sidebar-open')"></div>
+  <div class="app-content">
+    <header class="topbar">
+      <button class="btn btn-sm btn-light d-lg-none" type="button" aria-label="{% translate 'Open menu' %}" aria-controls="sidebar" onclick="document.body.classList.toggle('sidebar-open')"><i class="bi bi-list fs-5" aria-hidden="true"></i> <span class="d-none d-sm-inline">{% translate "Menu" %}</span></button>
+      <div class="ms-auto d-flex align-items-center gap-2 flex-wrap justify-content-end">
+        <a class="btn btn-sm call-btn" href="tel:{{ hotline }}"><i class="bi bi-telephone-fill" aria-hidden="true"></i> {% translate "Call" %} {{ hotline }}</a>
+        {% if user.is_superuser or user.role == 'operator' or user.role == 'admin' %}
+        <a class="btn btn-sm btn-light position-relative" href="{% url 'test_requests' %}"><i class="bi bi-clipboard2-pulse" aria-hidden="true"></i><span class="visually-hidden">{% translate "Patient test requests" %}</span><span id="op-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger{% if not pending_tests %} d-none{% endif %}">{{ pending_tests }}<span class="visually-hidden"> {% translate "waiting" %}</span></span></a>
+        <button type="button" class="btn btn-sm btn-light" id="op-sound" aria-pressed="false"><i class="bi bi-volume-mute" aria-hidden="true"></i><span class="visually-hidden">{% translate "Notification sound" %}</span></button>
+        {% endif %}
+        <a class="btn btn-sm btn-light position-relative" href="{% url 'notifications' %}"><i class="bi bi-bell" aria-hidden="true"></i><span class="visually-hidden">{% translate "Notifications" %}</span>{% if unread_count %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ unread_count }}<span class="visually-hidden"> {% translate "unread" %}</span></span>{% endif %}</a>
+        {% include "_language.html" %}
+        <a class="btn btn-sm btn-light" href="{% url 'profile' %}"><i class="bi bi-person-circle" aria-hidden="true"></i> <span class="d-none d-sm-inline">{{ user.username }}</span><span class="visually-hidden d-sm-none">{% translate "My profile" %}</span></a>
+      </div>
+    </header>
+    <main class="app-main" id="main" tabindex="-1">
+      <div id="op-toasts" style="position:fixed;top:64px;right:16px;z-index:1080;width:min(360px,calc(100vw - 32px))" role="status" aria-live="polite"></div>
+{% else %}
+<nav class="navbar navbar-expand-lg public-nav sticky-top" aria-label="{% translate 'Main' %}">
+  <div class="container">
+    <a class="navbar-brand" href="{% url 'landing' %}"><span class="brand-mark" aria-hidden="true"><i class="bi bi-heart-pulse-fill"></i></span> Smart Medical Emergency</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#pubnav" aria-controls="pubnav" aria-expanded="false" aria-label="{% translate 'Open menu' %}"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="pubnav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="{% url 'landing' %}#services">{% translate "Services" %}</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'disease_list' %}">{% translate "Health information" %}</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'assistant' %}">{% translate "Health questions" %}</a></li>
+      </ul>
+      <div class="d-flex gap-2 flex-wrap align-items-center">
+        <a class="btn btn-sm call-btn" href="tel:{{ hotline }}"><i class="bi bi-telephone-fill" aria-hidden="true"></i> {% translate "Call" %} {{ hotline }}</a>
+        {% include "_language.html" %}
+        <a class="btn btn-outline-primary btn-sm" href="{% url 'login' %}">{% translate "Log in" %}</a>
+        <a class="btn btn-primary btn-sm" href="{% url 'register' %}">{% translate "Create account" %}</a>
+      </div>
+    </div>
+  </div>
+</nav>
+<main class="container py-4" id="main" tabindex="-1">
+{% endif %}
+      {% block breadcrumbs %}{% endblock %}
+      {% block h1 %}<h1 class="page-h1">{% block page_title %}{% endblock %}</h1>{% endblock %}
+      {% for m in messages %}<div class="alert alert-{% if m.tags == 'error' %}danger{% else %}{{ m.tags }}{% endif %} alert-dismissible fade show d-flex gap-2" role="{% if m.tags == 'error' or m.tags == 'warning' %}alert{% else %}status{% endif %}"><i class="bi {% if m.tags == 'success' %}bi-check-circle-fill{% elif m.tags == 'error' %}bi-x-octagon-fill{% elif m.tags == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %}" aria-hidden="true"></i><div>{{ m }}</div><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{% translate 'Close message' %}"></button></div>{% endfor %}
+      {% block content %}{% endblock %}
+{% if user.is_authenticated %}
+    </main>
+    <footer class="app-footer">{% translate "Academic prototype - decision support only, not a diagnosis. Simulated data is always labelled." %} {% translate "In a life-threatening emergency also call" %} <b>{{ hotline }}</b>.</footer>
+  </div>
+</div>
+{% else %}
+</main>
+<footer class="site-footer py-4 mt-4">
+  <div class="container small d-flex flex-wrap justify-content-between gap-2">
+    <span>&copy; Smart Medical Emergency - {% translate "academic prototype. Not a replacement for calling" %} <b>{{ hotline }}</b>.</span>
+    <span><a href="{% url 'disease_list' %}">{% translate "Health information" %}</a> · <a href="{% url 'assistant' %}">{% translate "Health questions" %}</a> · <a href="{% url 'login' %}">{% translate "Log in" %}</a></span>
+  </div>
+</footer>
+{% endif %}
+{% include "_confirm_modal.html" %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'js/app.js' %}"></script>
+{% if user.is_authenticated %}<script src="{% static 'js/live.js' %}"></script>{% endif %}
+{% if user.is_superuser or user.role == 'operator' or user.role == 'admin' %}<script src="{% static 'js/operator-alerts.js' %}"></script>{% endif %}
+{% block scripts %}{% endblock %}
+<script>if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === '127.0.0.1' || location.hostname === 'localhost')) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
+</body>
+</html>

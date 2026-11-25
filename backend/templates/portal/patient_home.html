@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block h1 %}{% endblock %}
+{% block title %}{% translate "My dashboard" %}{% endblock %}
+{% block content %}
+<h1 class="page-h1 mb-1">{% blocktranslate with name=user.first_name|default:user.username %}Welcome back, {{ name }}{% endblocktranslate %}</h1>
+<p class="page-sub mt-0 mb-3">{% now "l, j F" %}</p>
+
+{% if not active %}
+<a class="rpm-alert sos mb-3" href="{% url 'request_emergency' %}"><i class="bi bi-exclamation-octagon-fill" aria-hidden="true"></i><span><strong>{% translate "Get emergency help" %}</strong> · {% translate "Request urgent medical assistance" %}</span><i class="bi bi-arrow-right ms-auto" aria-hidden="true"></i></a>
+{% else %}
+<a class="rpm-alert sos mb-3" href="{% url 'track' active.reference %}"><i class="bi bi-broadcast pulse" aria-hidden="true"></i><span><strong>{% translate "Emergency active" %}</strong> · {% include "_emergency_status.html" with s=active.status %}</span><i class="bi bi-arrow-right ms-auto" aria-hidden="true"></i></a>
+{% endif %}
+
+<h2 class="h6 mb-2">{% translate "My services" %}</h2>
+{% include "portal/_patient_nav.html" %}
+
+<section class="rpm" aria-labelledby="mon-title">
+  <div class="rpm-head">
+    <h2 class="h6 mb-0" id="mon-title"><i class="bi bi-activity" aria-hidden="true"></i> {% translate "My vital monitor" %}</h2>
+    {% with hr=vm.heart_rate_bpm %}{% if hr.value is not None %}<span class="rpm-sync"><span class="dot" aria-hidden="true"></span>{% translate "Last data" %}: {{ hr.at|timesince }}{% if hr.simulated %} <span class="badge badge-sim" title="{% translate 'Demonstration value, not a real measurement' %}">SIM</span>{% endif %}</span>{% endif %}{% endwith %}
+  </div>
+
+  <div class="rpm-tiles">
+    {% include "portal/_rpm_tile.html" with v=vm.temperature_c %}
+    {% include "portal/_rpm_tile.html" with v=vm.blood_pressure %}
+    {% include "portal/_rpm_tile.html" with v=vm.respiratory_rate %}
+  </div>
+
+  {% with hr=vm.heart_rate_bpm %}
+  <div class="rpm-main">
+    <div class="rpm-main-top">
+      <span class="rpm-label"><i class="bi bi-heart-pulse" aria-hidden="true"></i> {% translate "Heart rate" %}</span>
+      {% if hr.value is not None %}<span class="rpm-big {% if hr.abnormal %}warn{% endif %}"><i class="bi bi-heart-fill" aria-hidden="true"></i> {{ hr.value }}<small>{{ hr.unit }}</small></span>{% endif %}
+    </div>
+    <div class="rpm-trace">
+      {% if hr.value is not None %}<canvas data-spark="{{ hr.series }}" data-color="{% if hr.abnormal %}#f59e0b{% else %}#0ea5e9{% endif %}" role="img" aria-label="{% translate 'Heart rate trend from your last readings' %}"></canvas>
+      {% else %}<span class="rpm-nosignal">{% translate "No signal" %}</span>{% endif %}
+    </div>
+    <div class="rpm-main-foot">
+      {% if hr.value is not None %}<span class="{% if hr.abnormal %}text-warning{% else %}text-success{% endif %} fw-semibold">{% if hr.abnormal %}{% translate "Check" %}{% else %}{% translate "Normal" %}{% endif %}</span><span class="text-muted">{% translate "Trend of your last readings" %}</span>
+      {% else %}<a class="btn btn-primary btn-sm" href="{% url 'patient_tests' %}"><i class="bi bi-plus-lg" aria-hidden="true"></i> {% translate "Measure" %}</a>{% endif %}
+    </div>
+  </div>
+  {% endwith %}
+
+  {% with o=vm.spo2_pct %}
+  <div class="rpm-ox">
+    <span class="rpm-label"><i class="bi bi-lungs" aria-hidden="true"></i> {% translate "Pulse oximeter" %}</span>
+    <div class="rpm-ox-vals">
+      <span><small>SpO₂</small> <b class="{% if o.abnormal %}text-warning{% endif %}">{% if o.value is not None %}{{ o.value }}{% else %}--{% endif %}</b> %</span>
+      <span><small>{% translate "Pulse" %}</small> <b>{% if vm.heart_rate_bpm.value is not None %}{{ vm.heart_rate_bpm.value }}{% else %}--{% endif %}</b> bpm</span>
+      {% if o.value is None %}<a class="rpm-plus" href="{% url 'patient_tests' %}" aria-label="{% translate 'Measure' %}: SpO₂"><i class="bi bi-plus-lg" aria-hidden="true"></i></a>{% endif %}
+    </div>
+  </div>
+  {% endwith %}
+</section>
+
+
+{% endblock %}

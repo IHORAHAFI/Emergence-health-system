@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Get emergency help" %}{% endblock %}
+{% block page_title %}{% translate "Get emergency help" %}{% endblock %}
+{% block content %}
+<div class="card border-danger border-2 p-3 mb-3 d-flex flex-column flex-md-row gap-3 align-items-md-center" role="note">
+  <p class="mb-0 flex-grow-1"><i class="bi bi-exclamation-triangle-fill text-danger" aria-hidden="true"></i> <b>{% translate "Is someone not breathing, unconscious or bleeding heavily?" %}</b> {% translate "Call now - it is the fastest way. You can fill in this form afterwards." %}</p>
+  <a class="btn call-btn btn-lg flex-shrink-0" href="tel:{{ hotline }}"><i class="bi bi-telephone-fill" aria-hidden="true"></i> {% translate "Call" %} {{ hotline }}</a>
+</div>
+
+<form method="post" data-once id="em-form" novalidate aria-describedby="form-help">{% csrf_token %}
+  <p id="form-help" class="mb-3">{% translate "Only two things are needed: where you are and a phone number. Your request is sent straight away - it never waits for the AI." %}</p>
+  {% if form.errors %}
+  <div class="alert alert-danger" role="alert" tabindex="-1" id="error-summary">
+    <p class="fw-bold mb-1"><i class="bi bi-x-octagon-fill" aria-hidden="true"></i> {% translate "We could not send your request yet. Please fix this:" %}</p>
+    <ul class="mb-0">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}{% for f in form %}{% for e in f.errors %}<li><a href="#{{ f.id_for_label }}">{{ f.label }}</a>: {{ e }}</li>{% endfor %}{% endfor %}</ul>
+  </div>
+  {% endif %}
+  <div id="client-errors" class="alert alert-danger d-none" role="alert" tabindex="-1"></div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <section class="card p-3 p-md-4 mb-3" aria-labelledby="step1">
+        <h2 class="h5 mb-2" id="step1"><span class="form-step" aria-hidden="true">1</span>{% translate "Where are you?" %} <span class="text-danger" aria-hidden="true">*</span><span class="visually-hidden">({% translate "required" %})</span></h2>
+        <p class="small text-muted mb-2">{% translate "We use your location only to send the nearest ambulance. Only the team helping you can see it." %}</p>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <button type="button" class="btn btn-danger btn-lg" id="btn-gps"><i class="bi bi-crosshair" aria-hidden="true"></i> {% translate "Use my location" %}</button>
+          <button type="button" class="btn btn-outline-primary btn-lg" id="btn-manual"><i class="bi bi-hand-index" aria-hidden="true"></i> {% translate "I'll pick it on the map" %}</button>
+        </div>
+        <div id="loc-status" class="mb-2" role="status" aria-live="polite">{% translate "Location not set yet." %}</div>
+        <div id="map" class="map-sm mb-2" role="application" aria-label="{% translate 'Map. Tap where you are, or drag the pin to correct your position.' %}"></div>
+        <div class="p-2 rounded bg-light small mb-2" id="loc-display"><i class="bi bi-geo-alt" aria-hidden="true"></i> {% translate "Your location:" %} <b id="loc-coords">{% translate "not set" %}</b></div>
+        <label class="form-label" for="id_location_description">{% translate "Address or landmark (optional, helps the crew find you)" %}</label>
+        <input class="form-control" id="id_location_description" name="location_description" maxlength="255" value="{{ form.location_description.value|default:'' }}" placeholder="{% translate 'e.g. near Kimironko market, blue gate' %}" autocomplete="street-address">
+        {{ form.latitude }}{{ form.longitude }}{{ form.location_accuracy_m }}{{ form.location_source }}{{ form.location_consent }}
+      </section>
+    </div>
+
+    <div class="col-lg-5">
+      <section class="card p-3 p-md-4 mb-3" aria-labelledby="step2">
+        <h2 class="h5 mb-3" id="step2"><span class="form-step" aria-hidden="true">2</span>{% translate "How can we reach you?" %}</h2>
+        <label class="form-label" for="id_contact_phone">{% translate "Phone number" %} <span class="text-danger" aria-hidden="true">*</span><span class="visually-hidden">({% translate "required" %})</span></label>
+        <input type="tel" class="form-control form-control-lg" id="id_contact_phone" name="contact_phone" maxlength="20" required autocomplete="tel" inputmode="tel" value="{{ form.contact_phone.value|default:'' }}" aria-describedby="phone-help"{% if form.contact_phone.errors %} aria-invalid="true"{% endif %}>
+        <div class="form-text" id="phone-help">{% translate "Filled in from your profile. Change it if you are using another phone." %}</div>
+        <label class="form-label mt-3" for="id_emergency_type">{% translate "What kind of emergency?" %}</label>
+        {{ form.emergency_type }}
+        <div class="form-text">{% translate "Choose “Other” if you are not sure." %}</div>
+      </section>
+
+      <details class="card p-3 p-md-4 mb-3" id="more"{% if form.errors %} open{% endif %}>
+        <summary class="fw-semibold" style="cursor:pointer;min-height:44px;display:list-item">{% translate "Add more details (optional - helps the team prepare)" %}</summary>
+        <div class="mt-3">
+          <fieldset class="mb-3"><legend class="h6">{% translate "Who needs help?" %}</legend>
+            <div class="row g-2">
+              <div class="col-12"><label class="form-label" for="id_patient_name">{% translate "Full name" %}</label>{{ form.patient_name }}<div class="form-text">{% translate "Change this if you are asking for help for someone else." %}</div></div>
+              <div class="col-4"><label class="form-label" for="id_age">{% translate "Age" %}</label>{{ form.age }}</div>
+              <div class="col-8"><label class="form-label" for="id_gender">{% translate "Gender" %}</label>{{ form.gender }}</div>
+            </div>
+          </fieldset>
+          <fieldset class="mb-3"><legend class="h6">{% translate "What is happening?" %}</legend>
+            <label class="form-label" for="id_patient_condition">{% translate "How is the person right now?" %}</label>{{ form.patient_condition }}
+            <label class="form-label mt-2" for="id_description">{% translate "What happened?" %}</label>{{ form.description }}
+            <label class="form-label mt-2" for="id_symptoms">{% translate "What do you notice? (for example: vomiting, fever, cannot move an arm)" %}</label>{{ form.symptoms }}
+          </fieldset>
+          <fieldset class="mb-3"><legend class="h6">{% translate "Tick anything that is true" %}</legend>
+            <div class="row g-2">
+              {% for f in severity %}
+              <div class="col-sm-6"><div class="form-check check-tile"><input type="checkbox" class="form-check-input" name="{{ f.html_name }}" id="{{ f.id_for_label }}" {% if f.value %}checked{% endif %}><label class="form-check-label" for="{{ f.id_for_label }}">{{ f.label }}</label></div></div>
+              {% endfor %}
+            </div>
+            <label class="form-label mt-3" for="id_pain_level">{% translate "Pain (0 = none, 10 = worst):" %} <b id="pain-val">{{ form.pain_level.value|default:0 }}</b></label>
+            <input type="range" class="form-range" min="0" max="10" name="pain_level" id="id_pain_level" value="{{ form.pain_level.value|default:0 }}" aria-valuetext="{{ form.pain_level.value|default:0 }} / 10" oninput="document.getElementById('pain-val').textContent=this.value;this.setAttribute('aria-valuetext', this.value + ' / 10')">
+          </fieldset>
+          <fieldset><legend class="h6">{% translate "What do you need?" %}</legend>
+            <div class="row g-2">
+              <div class="col-sm-6"><div class="form-check check-tile service-tile"><input type="checkbox" class="form-check-input" name="request_ambulance" id="id_request_ambulance" {% if form.request_ambulance.value %}checked{% endif %}><label class="form-check-label" for="id_request_ambulance"><b><i class="bi bi-truck-front" aria-hidden="true"></i> {% translate "An ambulance" %}</b><br><small class="text-muted">{% translate "The nearest available ambulance comes to you." %}</small></label></div></div>
+              <div class="col-sm-6"><div class="form-check check-tile service-tile"><input type="checkbox" class="form-check-input" name="request_medical_advice" id="id_request_medical_advice" {% if form.request_medical_advice.value %}checked{% endif %}><label class="form-check-label" for="id_request_medical_advice"><b><i class="bi bi-headset" aria-hidden="true"></i> {% translate "Advice from a health worker" %}</b><br><small class="text-muted">{% translate "A professional reviews your request and advises you." %}</small></label></div></div>
+            </div>
+          </fieldset>
+        </div>
+      </details>
+
+      <button class="btn btn-danger btn-lg w-100 py-3 fw-bold fs-4" id="btn-submit" aria-describedby="submit-help"><i class="bi bi-send-fill" aria-hidden="true"></i> {% translate "Send for help" %}</button>
+      <p class="form-text text-center" id="submit-help">{% translate "Set your location first (step 1). Medical staff make all decisions; the AI only helps sort requests." %}</p>
+    </div>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('#em-form input[type=text],#em-form input[type=number],#em-form select,#em-form textarea').forEach(el => el.classList.add(el.tagName === 'SELECT' ? 'form-select' : 'form-control'));
+document.getElementById('error-summary')?.focus();
+const $ = id => document.getElementById(id);
+const f = {lat: $('id_latitude'), lng: $('id_longitude'), acc: $('id_location_accuracy_m'), src: $('id_location_source'), consent: $('id_location_consent')};
+const map = App.tiles(L.map('map').setView([-1.9536, 30.0606], 12));
+{% for h in hospitals %}L.marker([{{ h.latitude }}, {{ h.longitude }}], {icon: App.icon('bi-hospital', '#1a5fbf')}).addTo(map).bindTooltip("{{ h.name|escapejs }}");
+{% endfor %}
+let marker = null, manual = false;
+function setPoint(lat, lng, source, accuracy) {
+  f.lat.value = lat.toFixed(6); f.lng.value = lng.toFixed(6); f.src.value = source;
+  f.acc.value = accuracy ? Math.round(accuracy) : '';
+  f.consent.value = source === 'gps' ? 'on' : '';
+  if (!marker) {
+    marker = L.marker([lat, lng], {draggable: true, icon: App.icon('bi-person-fill', '#c62828')}).addTo(map);
+    marker.on('dragend', e => { const p = e.target.getLatLng(); setPoint(p.lat, p.lng, 'manual'); });
+  } else marker.setLatLng([lat, lng]);
+  map.setView([lat, lng], 15);
+  $('loc-coords').textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}` + (source === 'gps' ? ` (GPS${accuracy ? ', ±' + Math.round(accuracy) + ' m' : ''})` : ' ({% translate "chosen on the map" %})');
+  $('loc-status').innerHTML = source === 'gps'
+    ? `<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> {% translate "Location found. You can drag the pin if it is not right." %}</span>`
+    : `<span class="text-primary fw-semibold"><i class="bi bi-pin-map-fill" aria-hidden="true"></i> {% translate "Location chosen on the map." %}</span>`;
+  $('client-errors').classList.add('d-none');
+}
+$('btn-gps').onclick = () => {
+  if (!navigator.geolocation) { $('loc-status').innerText = '{% translate "This phone or browser cannot share your location. Please tap where you are on the map." %}'; manual = true; return; }
+  $('loc-status').innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> {% translate "Finding your location… If your browser asks, choose Allow." %}';
+  navigator.geolocation.getCurrentPosition(
+    p => setPoint(p.coords.latitude, p.coords.longitude, 'gps', p.coords.accuracy),
+    err => {
+      manual = true;
+      const why = {1: '{% translate "Location sharing was not allowed." %}', 2: '{% translate "Your location could not be found." %}', 3: '{% translate "Finding your location took too long." %}'}[err.code] || '{% translate "Your location could not be found." %}';
+      $('loc-status').innerHTML = `<span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> ${why} {% translate "Please tap where you are on the map instead." %}</span>`;
+    }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000});
+};
+$('btn-manual').onclick = () => { manual = true; $('loc-status').innerText = '{% translate "Tap the map where you are." %}'; $('map').scrollIntoView({block: 'center'}); };
+map.on('click', e => { if (manual || marker) setPoint(e.latlng.lat, e.latlng.lng, 'manual'); });
+if (f.lat.value && f.lng.value) setPoint(parseFloat(f.lat.value), parseFloat(f.lng.value), f.src.value || 'manual', parseFloat(f.acc.value));
+// client-side validation (the server validates again)
+$('em-form').addEventListener('submit', e => {
+  const errs = [];
+  const phone = $('id_contact_phone').value.trim();
+  if (!f.lat.value) errs.push(['btn-gps', '{% translate "Tell us where you are: press “Use my location” or tap the map (step 1)." %}']);
+  if (!/^\+?[0-9 ()-]{7,20}$/.test(phone)) errs.push(['id_contact_phone', '{% translate "Enter a phone number we can call, for example +250 781 234 567." %}']);
+  const age = $('id_age').value;
+  if (age && (age < 0 || age > 120)) errs.push(['id_age', '{% translate "Age must be between 0 and 120." %}']);
+  $('id_contact_phone').toggleAttribute('aria-invalid', errs.some(x => x[0] === 'id_contact_phone'));
+  if (errs.length) {
+    e.preventDefault(); e.stopImmediatePropagation();
+    const box = $('client-errors');
+    box.innerHTML = '<p class="fw-bold mb-1"><i class="bi bi-x-octagon-fill" aria-hidden="true"></i> {% translate "Not sent yet. Please fix this:" %}</p><ul class="mb-0">' + errs.map(([id, m]) => `<li><a href="#${id}" onclick="document.getElementById('${id}').focus();return false">${m}</a></li>`).join('') + '</ul>';
+    box.classList.remove('d-none'); box.focus();
+  }
+}, true);
+</script>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Patient test requests{% endblock %}
+{% block page_title %}Patient test requests{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="bi bi-clipboard2-pulse"></i> Patient test requests</h1>
+    <p class="subtitle">Requests sent by patients. New requests ring until someone accepts them - press <b>Enable sound</b> in the top bar once.</p></div>
+  <span class="status-pill danger fs-6"><span data-pending-count>{{ pending_count }}</span>&nbsp;pending</span>
+</div>
+<form class="card p-3 mb-3" method="get"><div class="row g-2 align-items-end">
+  <div class="col-md-5"><label class="form-label" for="q">Search</label><input class="form-control" id="q" name="q" value="{{ q }}" placeholder="Request ID or patient name"></div>
+  <div class="col-md-4"><label class="form-label" for="status">Status</label><select class="form-select" id="status" name="status">
+    <option value="open" {% if status == 'open' %}selected{% endif %}>Open (pending, accepted, testing)</option><option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
+    {% for v, l in statuses %}<option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ v|capfirst }}</option>{% endfor %}</select></div>
+  <div class="col-md-3 d-grid"><button class="btn btn-navy"><i class="bi bi-funnel"></i> Filter</button></div>
+</div></form>
+<div class="card"><div class="table-responsive"><table class="table align-middle">
+  <thead><tr><th>Request ID</th><th>Patient name</th><th>Patient ID</th><th>Test requested</th><th>Date</th><th>Time</th><th>Status</th><th class="text-end">Action</th></tr></thead><tbody>
+  {% for r in page %}<tr class="pending-row {% if r.status == 'pending' %}table-warning{% endif %}" data-ref="{{ r.reference }}">
+    <td class="fw-semibold small"><a href="{% url 'test_request_detail' r.reference %}">{{ r.reference }}</a>{% if r.emergency %}<br><span class="badge bg-danger">emergency {{ r.emergency.reference }}</span>{% endif %}</td>
+    <td>{{ r.patient.get_full_name|default:r.patient.username }}</td>
+    <td class="small">{{ r.patient_code }}</td>
+    <td class="small">{{ r.test_names }}</td>
+    <td class="small text-nowrap">{{ r.requested_at|date:"d M Y" }}</td>
+    <td class="small">{{ r.requested_at|date:"H:i:s" }}</td>
+    <td><span class="status-pill {% if r.status == 'pending' %}warning{% elif r.status == 'accepted' %}info{% elif r.status == 'testing' %}primary{% elif r.status == 'completed' %}success{% else %}secondary{% endif %}">{{ r.status_short }}</span></td>
+    <td class="text-end text-nowrap">
+      <a class="btn btn-sm btn-light" href="{% url 'test_request_detail' r.reference %}">View details</a>
+      {% if r.status == 'pending' %}<form method="post" action="{% url 'test_request_action' r.reference %}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button name="action" value="accept" class="btn btn-sm btn-success">Accept</button></form>
+      {% elif r.status == 'accepted' %}<a class="btn btn-sm btn-primary" href="{% url 'test_request_detail' r.reference %}#start">Start IoT test</a>
+      {% elif r.status == 'testing' and r.session %}<a class="btn btn-sm btn-primary" href="{% url 'sim_panel' r.session.id %}">Open live test</a>{% endif %}
+    </td>
+  </tr>{% empty %}<tr><td colspan="8" class="text-center text-muted py-4">No requests.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "portal/_pager.html" %}
+{% endblock %}
+{% block scripts %}
+<script>
+// reload when the set of requests changes (new request, accepted elsewhere, completed...)
+let sig = null;
+App.live(async () => {
+  const r = await fetch("{% url 'operator_feed' %}", {credentials: 'same-origin'});
+  if (!r.ok) return;
+  const d = await r.json(), s = d.open_count + ':' + d.pending.map(p => p.reference).join(',');
+  if (sig !== null && s !== sig) location.reload();
+  sig = s;
+}, {interval: 5000});
+</script>
+{% endblock %}

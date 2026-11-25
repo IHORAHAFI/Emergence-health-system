@@ -1,0 +1,6 @@
+{% load i18n %}{# What a measurement means, in plain words. General adult guidance, not a diagnosis. Param: k #}
+{% if k == 'temperature' or k == 'temperature_c' %}{% translate "How warm your body is. Usually about 36.1 to 37.5 °C. Higher can mean fever." %}
+{% elif k == 'heart_rate' or k == 'heart_rate_bpm' %}{% translate "How many times your heart beats in one minute. Usually 60 to 100 when resting." %}
+{% elif k == 'spo2' or k == 'spo2_pct' %}{% translate "How much oxygen your blood carries. Usually 95 to 100%." %}
+{% elif k == 'blood_pressure' %}{% translate "How hard your blood pushes on your blood vessels. Written as two numbers, for example 120/80." %}
+{% elif k == 'respiratory' or k == 'respiratory_rate' %}{% translate "How many breaths you take in one minute. Usually 12 to 20 when resting." %}{% endif %}

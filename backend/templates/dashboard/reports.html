@@ -1,0 +1,19 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block content %}
+<p class="text-muted">System evaluation report</p>
+<div class="row g-3 mb-3">
+  <div class="col-md-2"><div class="card text-center"><div class="card-body"><h2 class="h3">{{ total }}</h2>Requests</div></div></div>
+  <div class="col-md-2"><div class="card text-center"><div class="card-body"><h2 class="h3">{{ assigned_rate|floatformat:1 }}%</h2>Ambulance assigned</div></div></div>
+  <div class="col-md-2"><div class="card text-center"><div class="card-body"><h2 class="h3">{{ avg_eta|floatformat:1|default:"-" }}</h2>Avg ETA (min)</div></div></div>
+  <div class="col-md-2"><div class="card text-center"><div class="card-body"><h2 class="h3">{{ avg_dist|floatformat:2|default:"-" }}</h2>Avg amb. distance (km)</div></div></div>
+  <div class="col-md-2"><div class="card text-center"><div class="card-body"><h2 class="h3">{{ avg_dispatch_s|default:"-" }}</h2>Avg request→dispatch</div></div></div>
+  <div class="col-md-2"><div class="card text-center"><div class="card-body"><h2 class="h3">{{ overridden }}</h2>AI priority overrides</div></div></div>
+</div>
+<div class="row g-3">
+  <div class="col-md-4"><div class="card"><div class="card-header">By priority</div><ul class="list-group list-group-flush">{% for r in by_priority %}<li class="list-group-item">{{ r.priority }}: {{ r.n }}</li>{% endfor %}</ul></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-header">By type</div><ul class="list-group list-group-flush">{% for r in by_type %}<li class="list-group-item">{{ r.emergency_type }}: {{ r.n }}</li>{% endfor %}</ul></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-header">By status</div><ul class="list-group list-group-flush">{% for r in by_status %}<li class="list-group-item">{{ r.status }}: {{ r.n }}</li>{% endfor %}</ul></div></div>
+</div>
+{% endblock %}

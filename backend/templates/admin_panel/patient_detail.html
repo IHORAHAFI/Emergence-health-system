@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}{{ p.get_full_name|default:p.username }}{% endblock %}
+{% block page_title %}Patients{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>{{ p.get_full_name|default:p.username }}</h1><p class="subtitle"><i class="bi bi-lock"></i> Confidential - use only for handling emergencies.</p></div>
+  <a class="btn btn-light" href="{% url 'patient_list' %}"><i class="bi bi-arrow-left"></i> All patients</a></div>
+<div class="row g-3">
+  <div class="col-lg-4"><div class="card p-3">
+    <div class="section-title">Contact</div>
+    <p class="small">{{ p.phone|default:"No phone" }}<br>{{ p.email|default:"No email" }}<br>Registered {{ p.date_joined|date:"d M Y" }}</p>
+    <div class="section-title">Medical profile</div>
+    {% if profile %}
+    <dl class="row small mb-0">
+      <dt class="col-5">Date of birth</dt><dd class="col-7">{{ profile.date_of_birth|date:"d M Y"|default:"-" }}{% if profile.age is not None %} ({{ profile.age }}){% endif %}</dd>
+      <dt class="col-5">Gender</dt><dd class="col-7">{{ profile.gender|default:"-" }}</dd>
+      <dt class="col-5">Blood group</dt><dd class="col-7">{{ profile.blood_group|default:"-" }}</dd>
+      <dt class="col-5">Allergies</dt><dd class="col-7">{{ profile.allergies|default:"None recorded" }}</dd>
+      <dt class="col-5">Conditions</dt><dd class="col-7">{{ profile.chronic_conditions|default:"None recorded" }}</dd>
+      <dt class="col-5">Address</dt><dd class="col-7">{{ profile.home_address|default:"-" }}</dd>
+      <dt class="col-5">Emergency contact</dt><dd class="col-7">{{ profile.emergency_contact_name|default:"-" }} {{ profile.emergency_contact_relationship }} {{ profile.emergency_contact_phone }}{% if profile.notify_emergency_contact %}<br><span class="badge bg-light text-dark border">SMS consent given</span>{% endif %}</dd>
+    </dl>
+    {% else %}<p class="small text-muted mb-0">No medical profile.</p>{% endif %}
+  </div></div>
+  <div class="col-lg-8"><div class="card"><div class="card-header">Emergency history</div><div class="table-responsive"><table class="table table-hover">
+    <thead><tr><th>Reference</th><th>Type</th><th>Priority</th><th>Status</th><th>Hospital</th><th>Date</th></tr></thead><tbody>
+    {% for e in emergencies %}<tr class="clickable" onclick="location='{% url 'emergency_detail' e.id %}'"><td class="small fw-semibold">{{ e.reference }}</td><td class="small">{{ e.get_emergency_type_display }}</td><td><span class="badge prio-{{ e.priority }}">{{ e.priority }}</span></td><td class="small">{{ e.get_status_display }}</td><td class="small">{{ e.assigned_hospital.name|default:"-" }}</td><td class="small">{{ e.created_at|date:"d M Y H:i" }}</td></tr>
+    {% empty %}<tr><td colspan="6" class="text-center text-muted py-3">No emergencies.</td></tr>{% endfor %}
+  </tbody></table></div></div></div>
+</div>
+{% endblock %}

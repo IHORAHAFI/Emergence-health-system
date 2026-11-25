@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block h1 %}{% endblock %}
+{% block title %}Test {{ req.reference }}{% endblock %}
+{% block page_title %}Medical test results{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small"><li class="breadcrumb-item"><a href="{% if user.role == 'patient' %}{% url 'patient_tests' %}{% else %}{% url 'test_request_detail' req.reference %}{% endif %}">{% translate "Medical tests" %}</a></li><li class="breadcrumb-item active">{{ req.reference }}</li></ol></nav>
+<div class="page-header">
+  <div><h1>{{ req.test_names }}</h1>
+    <p class="subtitle">{% translate "Request" %} <b>{{ req.reference }}</b> · {% translate "asked for on" %} {{ req.requested_at|date:"d M Y H:i" }} · <span id="live-note" class="text-muted" aria-live="polite"></span></p></div>
+  <div class="d-flex gap-2 align-items-center">
+    <span id="status" class="status-pill fs-6" aria-hidden="true">-</span>
+    {% if user.role == 'patient' and req.status in 'pending accepted' %}
+    <form method="post" action="{% url 'patient_test_cancel' req.reference %}" data-confirm="Cancel this test request? You can request it again later.">{% csrf_token %}<button class="btn btn-outline-secondary">{% translate "Cancel this request" %}</button></form>{% endif %}
+  </div>
+</div>
+
+<p class="fs-5 mb-3" id="status-text" role="status" aria-live="polite"></p>
+<div class="card p-3 mb-3">
+  <ol class="d-flex flex-wrap justify-content-between gap-2 small list-unstyled mb-0" id="timeline" aria-label="{% translate 'Progress' %}">
+    <li data-step="requested"><i class="bi bi-circle-fill" aria-hidden="true"></i> {% translate "1. Request sent" %}<span class="visually-hidden" data-done></span><br><span class="text-muted" data-time></span></li>
+    <li data-step="accepted"><i class="bi bi-circle" aria-hidden="true"></i> {% translate "2. Accepted by staff" %}<span class="visually-hidden" data-done></span><br><span class="text-muted" data-time></span></li>
+    <li data-step="started"><i class="bi bi-circle" aria-hidden="true"></i> {% translate "3. Test in progress" %}<span class="visually-hidden" data-done></span><br><span class="text-muted" data-time></span></li>
+    <li data-step="completed"><i class="bi bi-circle" aria-hidden="true"></i> {% translate "4. Results ready" %}<span class="visually-hidden" data-done></span><br><span class="text-muted" data-time></span></li>
+  </ol>
+</div>
+
+<div id="empty" class="alert alert-info"><i class="bi bi-hourglass-split" aria-hidden="true"></i> <span id="empty-text">{% translate "Results are not available yet." %}</span></div>
+<div id="sim-note" class="alert alert-secondary d-none"><i class="bi bi-info-circle-fill" aria-hidden="true"></i> {% translate "These are SIMULATED demonstration values, not real measurements of your body. Do not use them to make medical decisions." %}</div>
+<div class="row g-3 mb-3" id="cards"></div>
+
+<div class="card mb-3 d-none" id="chart-card"><div class="card-header"><h2 class="h6 mb-0">{% translate "How your values changed" %}</h2></div><div class="card-body" style="height:260px"><canvas id="chart" role="img" aria-label="{% translate 'Chart of your measurements over time. The same values are listed in the table below.' %}"></canvas></div></div>
+<div class="card d-none" id="table-card"><div class="card-header d-flex justify-content-between"><h2 class="h6 mb-0">{% translate "All measurements" %}</h2><span class="small text-muted" id="count"></span></div>
+  <div class="table-responsive" style="max-height:380px" tabindex="0" role="region" aria-label="{% translate 'All measurements' %}"><table class="table table-sm"><thead><tr><th scope="col">{% translate "Time" %}</th><th scope="col">{% translate "Device" %}</th><th scope="col">{% translate "Measurement" %}</th><th scope="col">{% translate "Source" %}</th></tr></thead><tbody id="rows"></tbody></table></div></div>
+{{ data|json_script:"initial-data" }}
+{% endblock %}
+{% block scripts %}
+<script>
+const E = App.esc, DATA_URL = "{% url 'test_data' req.reference %}";
+const NAMES = {temperature_c: '{% translate "Body temperature" %}', heart_rate_bpm: '{% translate "Heart rate" %}', spo2_pct: '{% translate "Oxygen level" %}', systolic_mmhg: '{% translate "Blood pressure (top)" %}', diastolic_mmhg: '{% translate "Blood pressure (bottom)" %}', respiratory_rate: '{% translate "Breathing rate" %}'};
+const T = {pending: '{% translate "Received" %}', accepted: '{% translate "Accepted" %}', testing: '{% translate "In progress" %}', completed: '{% translate "Results ready" %}', cancelled: '{% translate "Cancelled" %}',
+  done: '{% translate "done" %}', notyet: '{% translate "not yet" %}', usual: '{% translate "Within the usual range" %}', outside: '{% translate "Outside the usual range - medical staff can see this" %}',
+  sim: '{% translate "SIMULATED" %}', real: '{% translate "REAL" %}', live: '{% translate "Updates automatically" %}', poll: '{% translate "Checking for updates every few seconds" %}'};
+const COLORS = {temperature_c: '#e8590c', heart_rate_bpm: '#c62828', spo2_pct: '#1d6fd8', systolic_mmhg: '#0b2545', diastolic_mmhg: '#7c3aed', respiratory_rate: '#18794e'};
+const ICONS = {temperature_c: 'bi-thermometer-half', heart_rate_bpm: 'bi-heart-pulse', spo2_pct: 'bi-lungs', blood_pressure: 'bi-activity', respiratory_rate: 'bi-wind'};
+let chart = null, lastStatus = null;
+function render(d) {
+  const pill = document.getElementById('status');
+  pill.textContent = T[d.status];
+  document.getElementById('status-text').innerHTML = `<i class="bi ${({completed: 'bi-check-circle-fill text-success', cancelled: 'bi-x-circle', testing: 'bi-broadcast text-primary'})[d.status] || 'bi-hourglass-split'}" aria-hidden="true"></i> ${E(d.status_text)}`;
+  pill.className = 'status-pill fs-6 ' + ({pending: 'warning', accepted: 'info', testing: 'primary', completed: 'success', cancelled: 'secondary'}[d.status]);
+  if (lastStatus && lastStatus !== d.status && ['completed', 'cancelled'].includes(d.status)) setTimeout(() => location.reload(), 300);
+  lastStatus = d.status;
+  const times = {requested: d.requested_at, accepted: d.accepted_at, started: d.started_at, completed: d.completed_at};
+  document.querySelectorAll('#timeline [data-step]').forEach(el => {
+    const t = times[el.dataset.step];
+    el.querySelector('i').className = 'bi ' + (t ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted');
+    el.querySelector('[data-done]').textContent = ' - ' + (t ? T.done : T.notyet);
+    el.querySelector('[data-time]').textContent = t ? new Date(t).toLocaleString() : '';
+  });
+  const keys = Object.keys(d.summary), has = keys.length > 0;
+  document.getElementById('empty').classList.toggle('d-none', has);
+  document.getElementById('empty-text').textContent = {pending: '{% translate "Results are not available yet. Please wait for medical staff." %}', accepted: '{% translate "Results are not available yet. The test will start soon." %}', testing: '{% translate "The test is running. The first results will appear here in a few seconds." %}', cancelled: '{% translate "This request was cancelled. There are no results." %}', completed: '{% translate "No measurements were recorded." %}'}[d.status];
+  document.getElementById('sim-note').classList.toggle('d-none', !d.readings.some(r => r.simulated));
+  document.getElementById('cards').innerHTML = keys.map(k => {
+    const s = d.summary[k], flag = Object.keys(s.flags || {}).length;
+    return `<div class="col-sm-6 col-xl-4"><section class="card p-3 h-100 ${flag ? 'border-warning border-2' : ''}" aria-label="${E(s.label)}">
+      <h2 class="h6 mb-1"><i class="bi ${ICONS[k]}" aria-hidden="true"></i> ${E(s.label)}</h2>
+      <div class="fs-2 fw-bold">${E(s.value)}<small class="fs-6 text-muted"> ${E(s.unit)}</small></div>
+      <p class="mb-2">${flag ? `<span class="text-warning fw-semibold"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> ${T.outside}</span>` : `<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> ${T.usual}</span>`}</p>
+      <p class="explain mb-2">${E(s.explain)}</p>
+      <div class="small text-muted">${E(s.device)} · ${new Date(s.at).toLocaleTimeString()} · ${s.simulated ? `<span class="badge badge-sim">${T.sim}</span>` : `<span class="badge bg-primary">${T.real}</span>`}</div>
+    </section></div>`;
+  }).join('');
+  ['chart-card', 'table-card'].forEach(id => document.getElementById(id).classList.toggle('d-none', !has));
+  if (!has) return;
+  const rows = [...d.readings].reverse();
+  const fields = d.fields;
+  if (!chart) chart = new Chart(document.getElementById('chart'), {type: 'line', data: {labels: [], datasets: fields.map(f => ({label: NAMES[f], data: [], borderColor: COLORS[f], backgroundColor: COLORS[f], borderWidth: 2, pointRadius: 2, spanGaps: true, tension: .3}))},
+    options: {animation: false, responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'bottom', labels: {boxWidth: 10}}}}});
+  chart.data.labels = rows.map(r => new Date(r.at).toLocaleTimeString());
+  chart.data.datasets.forEach((ds, i) => ds.data = rows.map(r => r[fields[i]]));
+  chart.update();
+  document.getElementById('count').textContent = d.readings.length;
+  document.getElementById('rows').innerHTML = d.readings.map(r => `<tr><td class="small text-nowrap">${new Date(r.at).toLocaleString()}</td><td class="small">${E(r.device)}<br><span class="text-muted">${E(r.device_id)}</span></td>
+    <td class="small">${fields.filter(f => r[f] != null).map(f => `${NAMES[f]} ${r[f]} ${d.units[f]}`).join(' · ')}</td>
+    <td>${r.simulated ? `<span class="badge badge-sim">${T.sim}</span>` : `<span class="badge bg-primary">${T.real}</span>`}</td></tr>`).join('');
+}
+render(JSON.parse(document.getElementById('initial-data').textContent));
+App.live(async () => { const r = await fetch(DATA_URL, {credentials: 'same-origin'}); if (r.ok) render(await r.json()); },
+  {interval: 3000, slowInterval: 8000, onStatus: s => document.getElementById('live-note').textContent = s === 'live' ? T.live : T.poll});
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block page_title %}Log in{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-5 col-lg-4">
+  <div class="card p-4">
+    <form method="post">{% csrf_token %}
+      {% if form.errors %}<div class="alert alert-danger" role="alert" id="login-error"><i class="bi bi-x-octagon-fill" aria-hidden="true"></i> The username or password is not correct, or the account is not active yet. Check both and try again.</div>{% endif %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <label class="form-label" for="id_username">Username <span class="text-danger" aria-hidden="true">*</span></label>
+      <input class="form-control mb-3" id="id_username" name="username" autocomplete="username" required autofocus value="{{ form.username.value|default:'' }}" {% if form.errors %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
+      <label class="form-label" for="id_password">Password <span class="text-danger" aria-hidden="true">*</span></label>
+      <div class="input-group mb-3">
+        <input class="form-control" type="password" id="id_password" name="password" autocomplete="current-password" required {% if form.errors %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
+        <button class="btn btn-outline-secondary" type="button" aria-controls="id_password" aria-pressed="false" onclick="const p=document.getElementById('id_password');const show=p.type==='password';p.type=show?'text':'password';this.setAttribute('aria-pressed',show);this.textContent=show?'Hide':'Show'">Show</button>
+      </div>
+      <button class="btn btn-primary btn-lg w-100">Log in</button>
+    </form>
+    <hr><p class="small mb-0">No account? <a href="{% url 'register' %}">Register as a patient</a> or
+      <a href="{% url 'register_professional' %}">as a healthcare professional</a>.</p>
+  </div>
+</div></div>
+{% endblock %}

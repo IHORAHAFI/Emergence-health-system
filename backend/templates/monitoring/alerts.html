@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Vital-sign alerts{% endblock %}
+{% block page_title %}Vital-sign alerts{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="bi bi-exclamation-triangle text-danger"></i> Vital-sign alerts</h1>
+    <p class="subtitle">Measurements outside the configured limits. An alert flags a value for review - it is <b>not a diagnosis</b>.</p></div>
+  <div class="btn-group">
+    <a class="btn btn-sm {% if show == 'open' %}btn-navy{% else %}btn-light{% endif %}" href="?show=open">Open ({{ open_count }})</a>
+    <a class="btn btn-sm {% if show == 'all' %}btn-navy{% else %}btn-light{% endif %}" href="?show=all">All</a>
+  </div>
+</div>
+<div class="card mb-3"><div class="table-responsive"><table class="table align-middle">
+  <thead><tr><th>Time</th><th>Emergency</th><th>Measurement</th><th>Source device</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
+  {% for a in page %}<tr class="{% if a.status == 'open' %}table-danger{% endif %}">
+    <td class="small text-nowrap">{{ a.created_at|date:"d M H:i:s" }}</td>
+    <td class="small">{% if a.emergency %}<a href="{% url 'vitals_detail' a.emergency.reference %}">{{ a.emergency.reference }}</a><br><span class="text-muted">{{ a.emergency.patient_name|default:a.emergency.patient.get_full_name }}</span>{% elif a.test_request %}<a href="{% url 'test_request_detail' a.test_request.reference %}">{{ a.test_request.reference }}</a><br><span class="text-muted">test · {{ a.test_request.patient.get_full_name|default:a.test_request.patient.username }}</span>{% endif %}</td>
+    <td><b>{{ a.value|floatformat:"-1" }} {{ a.unit }}</b> <span class="small text-muted">({{ a.limit }})</span><br><span class="small">{{ a.message }}</span> {% if a.is_simulated %}<span class="badge badge-sim">SIMULATED</span>{% endif %}</td>
+    <td class="small">{% if a.device %}{{ a.device.name }}<br><span class="text-muted">{{ a.device.device_identifier }}</span>{% else %}Manual entry{% endif %}</td>
+    <td class="small">{% if a.status == 'open' %}<span class="status-pill danger">Open</span>{% else %}<span class="status-pill success">Acknowledged</span><br>{{ a.acknowledged_by.username }} {{ a.acknowledged_at|date:"H:i" }}{% endif %}</td>
+    <td class="text-end">{% if a.status == 'open' %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="ack"><input type="hidden" name="alert" value="{{ a.id }}"><button class="btn btn-sm btn-outline-success">Acknowledge</button></form>{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-check-circle text-success"></i> No {% if show == 'open' %}open {% endif %}alerts.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "portal/_pager.html" %}
+
+<div class="card mt-3"><div class="card-header">Alert thresholds <span class="badge bg-warning text-dark">demonstration limits - not universal clinical rules</span></div>
+  <form method="post" class="card-body">{% csrf_token %}<input type="hidden" name="action" value="thresholds">
+  <div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr><th>Measurement</th><th>Age group</th><th>Alert below</th><th>Alert above</th><th>On</th></tr></thead><tbody>
+    {% for t in thresholds %}<tr><td>{{ t.get_parameter_display }}</td><td class="small">{{ t.get_age_group_display }}</td>
+      <td style="max-width:110px">{% if is_admin %}<input class="form-control form-control-sm" name="low_{{ t.id }}" value="{{ t.low|default_if_none:'' }}" inputmode="decimal">{% else %}{{ t.low|default_if_none:"-" }}{% endif %}</td>
+      <td style="max-width:110px">{% if is_admin %}<input class="form-control form-control-sm" name="high_{{ t.id }}" value="{{ t.high|default_if_none:'' }}" inputmode="decimal">{% else %}{{ t.high|default_if_none:"-" }}{% endif %}</td>
+      <td>{% if is_admin %}<input class="form-check-input" type="checkbox" name="on_{{ t.id }}" {% if t.enabled %}checked{% endif %}>{% else %}{{ t.enabled|yesno:"yes,no" }}{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if is_admin %}<button class="btn btn-primary btn-sm">Save thresholds</button>{% else %}<p class="small text-muted mb-0">Only administrators can change thresholds.</p>{% endif %}
+  <p class="small text-muted mt-2 mb-0">Children (under 16) are checked against the child limits; everyone else against the adult limits. Alerts also feed the existing workflow: the receiving hospital, operators and the ambulance crew are notified (at most once every 5 minutes per alert).</p>
+  </form>
+</div>
+{% endblock %}

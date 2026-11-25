@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Messages" %}{% endblock %}
+{% block page_title %}{% translate "Messages" %}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+  <div>{% if unread %}<span class="badge bg-danger">{{ unread }} unread</span>{% endif %}</div>
+  <div class="d-flex gap-2">
+    <div class="btn-group btn-group-sm">
+      <a class="btn btn-outline-secondary {% if not request.GET.channel %}active{% endif %}" href="?">All</a>
+      <a class="btn btn-outline-secondary {% if request.GET.channel == 'in_app' %}active{% endif %}" href="?channel=in_app">In-app</a>
+      <a class="btn btn-outline-secondary {% if request.GET.channel == 'sms' %}active{% endif %}" href="?channel=sms">SMS</a>
+      <a class="btn btn-outline-secondary {% if request.GET.channel == 'push' %}active{% endif %}" href="?channel=push">Push</a>
+    </div>
+    <form method="post" action="{% url 'notifications_read' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Mark all read</button></form>
+  </div>
+</div>
+<div class="card"><table class="table table-sm mb-0 align-middle">
+  <tr><th>When</th><th>Channel</th><th>Message</th><th>Delivery</th><th>Emergency</th></tr>
+  {% for n in page %}
+  <tr class="{% if not n.is_read and n.recipient_id == user.id %}fw-semibold{% endif %}">
+    <td class="small text-nowrap">{{ n.created_at|date:"d M H:i" }}</td>
+    <td><span class="badge bg-light text-dark">{{ n.get_channel_display }}</span>{% if n.destination %}<div class="small text-muted">{{ n.destination }}</div>{% endif %}</td>
+    <td class="small"><b>{{ n.title }}</b><br>{{ n.message }}</td>
+    <td class="small">{% if n.delivery_status == 'sent' %}<span class="badge bg-success">{{ n.get_delivery_status_display }}</span>
+      {% elif n.delivery_status == 'simulated' %}<span class="badge badge-sim">{{ n.get_delivery_status_display }}</span>
+      {% else %}<span class="badge bg-warning text-dark">{{ n.get_delivery_status_display }}</span>{% endif %}
+      {% if n.error %}<div class="text-danger">{{ n.error|truncatechars:80 }}</div>{% endif %}</td>
+    <td class="small">{% if n.emergency %}<a href="{% url 'track' n.emergency.reference %}">{{ n.emergency.reference }}</a>{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="5" class="text-muted">No notifications.</td></tr>{% endfor %}
+</table></div>
+{% include "portal/_pager.html" %}
+{% if history is not None %}
+<details class="card mt-3 fold">
+  <summary class="h6 mb-0 p-3">{% translate "My emergency requests" %}</summary>
+  <div class="table-responsive border-top"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th scope="col">{% translate "Reference" %}</th><th scope="col">{% translate "Type" %}</th><th scope="col">{% translate "Status" %}</th><th scope="col">{% translate "Date" %}</th></tr></thead><tbody>
+    {% for e in history %}<tr><td><a href="{% url 'track' e.reference %}" class="fw-semibold">{{ e.reference }}</a></td><td>{{ e.get_emergency_type_display }}</td>
+      <td><span class="status-pill {% if e.status == 'completed' %}success{% elif e.status == 'cancelled' %}secondary{% else %}warning{% endif %}">{{ e.get_status_display }}</span></td><td class="small text-muted">{{ e.created_at|date:"d M Y" }}</td></tr>
+    {% empty %}<tr><td colspan="4"><div class="empty"><i class="bi bi-shield-check" aria-hidden="true"></i>{% translate "No previous emergencies." %}</div></td></tr>{% endfor %}
+  </tbody></table></div>
+</details>
+{% endif %}
+{% endblock %}

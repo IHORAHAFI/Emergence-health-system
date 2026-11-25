@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Vitals {{ em.reference }}{% endblock %}
+{% block page_title %}Vitals {{ em.reference }}{% endblock %}
+{% block content %}
+<a href="{% url 'vitals_board' %}">&larr; Vital signs monitor</a>
+<div class="d-flex flex-wrap justify-content-between align-items-center mt-2">
+  <h2 class="h3 mb-0">{{ em.reference }} <span class="badge prio-{{ em.priority }}">{{ em.priority }}</span>
+    <small class="text-muted">{{ em.get_emergency_type_display }}</small></h2>
+  <span id="live"><span class="badge bg-secondary">connecting…</span></span>
+</div>
+<div class="row g-3 mt-1">
+  <div class="col-lg-7">
+    <div class="card p-3 mb-3" id="latest">
+      {% if latest %}
+      <div class="d-flex justify-content-between"><h2 class="h5 mb-1">Latest reading</h2>
+        <span class="small text-muted">{{ latest.measured_at|date:"H:i:s" }} · {{ latest.get_source_display }}{% if latest.device %} · {{ latest.device }}{% endif %}</span></div>
+      <div class="row text-center g-2 my-1">
+        <div class="col"><div class="stat"><div class="stat-num">{{ latest.temperature_c|default:"-" }}</div><small>°C</small></div></div>
+        <div class="col"><div class="stat"><div class="stat-num">{{ latest.heart_rate_bpm|default:"-" }}</div><small>bpm</small></div></div>
+        <div class="col"><div class="stat"><div class="stat-num">{{ latest.spo2_pct|default:"-" }}</div><small>SpO₂ %</small></div></div>
+        <div class="col"><div class="stat"><div class="stat-num">{% if latest.systolic_mmhg %}{{ latest.systolic_mmhg }}/{{ latest.diastolic_mmhg }}{% else %}-{% endif %}</div><small>mmHg</small></div></div>
+        <div class="col"><div class="stat"><div class="stat-num">{{ latest.news2_score|default_if_none:"-" }}</div><small>NEWS2{% if latest.news2_partial %} (partial){% endif %}</small></div></div>
+      </div>
+      <p class="mb-1"><span class="badge risk-{{ latest.risk }}">{{ latest.risk_label }}</span>
+        {% if latest.is_simulated %}<span class="badge badge-sim">SIMULATED - not a real measurement</span>{% endif %}</p>
+      <ul class="small mb-0">{% for a in latest.alerts %}<li class="{% if a.severity == 'red' %}text-danger{% elif a.severity == 'amber' %}text-warning{% else %}text-muted{% endif %}">{{ a.explanation }}</li>{% empty %}<li class="text-muted">No parameter outside NEWS2 normal ranges.</li>{% endfor %}</ul>
+      {% else %}<p class="text-muted mb-0">No vital signs received yet{% if not consent %} - the patient has not given consent to share measurements{% endif %}.</p>{% endif %}
+      <p class="small text-muted mt-2 mb-0">Decision support (NEWS2, Royal College of Physicians). Not a diagnosis - confirm or override below.</p>
+    </div>
+    <div class="card"><div class="card-header">History</div><div class="table-responsive"><table class="table table-sm align-middle mb-0" id="hist">
+      <tr><th>Measured</th><th>Source</th><th>Temp</th><th>HR</th><th>SpO₂</th><th>BP</th><th>RR</th><th>ECG</th><th>NEWS2</th><th>Review</th></tr>
+      {% for r in readings %}<tr class="small">
+        <td>{{ r.measured_at|date:"H:i:s" }}</td><td>{{ r.source }}{% if r.device %}<br><span class="text-muted">{{ r.device.name }}</span>{% endif %}</td>
+        <td>{{ r.temperature_c|default:"" }}</td><td>{{ r.heart_rate_bpm|default:"" }}</td><td>{{ r.spo2_pct|default:"" }}</td>
+        <td>{% if r.systolic_mmhg %}{{ r.systolic_mmhg }}/{{ r.diastolic_mmhg }}{% endif %}</td><td>{{ r.respiratory_rate|default:"" }}</td><td>{{ r.ecg_rhythm }}</td>
+        <td>{{ r.news2_score|default_if_none:"" }} <span class="badge risk-{{ r.risk }}">{{ r.risk }}</span></td>
+        <td>{% for v in r.reviews.all %}<div>{{ v.get_decision_display }}{% if v.override_risk %} → {{ v.override_risk }}{% endif %} by {{ v.reviewer.username }}{% if v.note %}: {{ v.note }}{% endif %}</div>{% endfor %}
+          {% if can_review %}<form class="review d-flex gap-1 mt-1" data-id="{{ r.id }}">
+            <select name="decision" class="form-select form-select-sm"><option value="confirm">Confirm</option><option value="override">Override →</option></select>
+            <select name="override_risk" class="form-select form-select-sm">{% for k in risks %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+            <input name="note" class="form-control form-control-sm" placeholder="note" maxlength="200"><button class="btn btn-sm btn-outline-primary">Save</button></form>{% endif %}</td>
+      </tr>{% empty %}<tr><td colspan="10" class="text-muted small">No readings.</td></tr>{% endfor %}
+    </table></div></div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3 small">
+      <p class="mb-1"><b>Patient:</b> {{ em.patient.get_full_name|default:em.patient.username }}{% if em.age %}, {{ em.age }} y{% endif %} · <a href="tel:{{ em.contact_phone }}">{{ em.contact_phone }}</a></p>
+      <p class="mb-1"><b>Status:</b> {{ em.get_status_display }} · <b>Hospital:</b> {{ em.assigned_hospital.name|default:"-" }}</p>
+      <p class="mb-1"><b>Ambulance:</b> {{ em.assigned_ambulance.plate_number|default:"none" }}{% if em.assigned_ambulance %} - {{ em.assigned_ambulance.get_status_display }}{% if em.eta_minutes %}, ETA ~{{ em.eta_minutes|floatformat:0 }} min{% endif %}{% endif %}</p>
+      {% if user.role != 'paramedic' %}<a href="{% url 'emergency_detail' em.id %}">Open full emergency record</a>{% endif %}
+    </div>
+    <div class="card p-2 mb-3"><div id="map" class="map-sm"></div></div>
+    {% if audit %}<div class="card"><div class="card-header">Access audit trail</div><ul class="list-group list-group-flush">
+      {% for a in audit %}<li class="list-group-item small">{{ a.at|date:"H:i:s" }} · {{ a.user.username|default:"-" }} · {{ a.action }} {{ a.detail }}</li>{% endfor %}</ul></div>{% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const map = App.tiles(L.map('map').setView([{{ em.latitude }}, {{ em.longitude }}], 13));
+const pts = [[{{ em.latitude }}, {{ em.longitude }}]];
+L.marker(pts[0], {icon: App.icon('bi-person-fill', '#b42318')}).addTo(map).bindPopup('Patient');
+{% if em.assigned_ambulance %}pts.push([{{ em.assigned_ambulance.latitude }}, {{ em.assigned_ambulance.longitude }}]);
+L.marker(pts[1], {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map).bindPopup("{{ em.assigned_ambulance.plate_number|escapejs }}{% if em.assigned_ambulance.location_is_simulated %} (simulated position){% endif %}");{% endif %}
+{% if em.assigned_hospital %}pts.push([{{ em.assigned_hospital.latitude }}, {{ em.assigned_hospital.longitude }}]);
+L.marker(pts[pts.length - 1], {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map);{% endif %}
+if (pts.length > 1) map.fitBounds(pts, {padding: [30, 30]});
+document.querySelectorAll('form.review').forEach(f => f.onsubmit = async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(f));
+  const r = await fetch(`/api/monitoring/readings/${f.dataset.id}/review/`, {method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': App.csrf()}, body: JSON.stringify(body)});
+  if (r.ok) location.reload(); else alert((await r.json()).detail || 'Could not save review');
+});
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/vitals/{{ em.reference }}/');
+  ws.onopen = () => document.getElementById('live').innerHTML = '<span class="badge bg-success">live</span>';
+  ws.onmessage = () => location.reload();
+  ws.onclose = () => { document.getElementById('live').innerHTML = '<span class="badge bg-warning text-dark">offline - retrying</span>'; setTimeout(connect, 5000); };
+}
+connect();
+</script>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ em.reference }}{% endblock %}
+{% block page_title %}{{ em.reference }}{% endblock %}
+{% block content %}
+<a href="{% url 'dashboard' %}">&larr; Dashboard</a>
+<h2 class="h3 mt-2">{{ em.reference }} - {{ em.get_emergency_type_display }}
+  <span class="badge prio-{{ em.priority }}">{{ em.priority }}</span>
+  {% if em.is_simulated %}<span class="badge badge-sim">SIMULATED</span>{% endif %}</h2>
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3 mb-3">
+      <p class="mb-1"><b>Status:</b> {{ em.get_status_display }} · created {{ em.created_at|date:"d M Y H:i" }}</p>
+      <p class="mb-1"><b>Patient:</b> {{ em.patient.get_full_name|default:em.patient.username }} · <a href="tel:{{ em.contact_phone }}">{{ em.contact_phone|default:em.patient.phone }}</a> · age {{ em.age|default:"?" }}</p>
+      {% with p=em.patient.patient_profile %}{% if p %}<p class="mb-1 small"><b>Medical:</b> blood {{ p.blood_group|default:"?" }} · allergies: {{ p.allergies|default:"none recorded" }} · conditions: {{ p.chronic_conditions|default:"none recorded" }} · emergency contact: {{ p.emergency_contact_name }} {{ p.emergency_contact_phone }}</p>{% endif %}{% endwith %}
+      <p class="mb-1 small"><b>Symptoms:</b> conscious {{ em.conscious|yesno }}, breathing difficulty {{ em.breathing_difficulty|yesno }}, severe bleeding {{ em.severe_bleeding|yesno }}, chest pain {{ em.chest_pain|yesno }}, pain {{ em.pain_level }}/10, pregnant {{ em.pregnant|yesno }}</p>
+      {% if em.patient_name or em.gender %}<p class="mb-1 small"><b>Person needing help:</b> {{ em.patient_name|default:"-" }}{% if em.age %} · {{ em.age }} y{% endif %}{% if em.gender %} · {{ em.gender }}{% endif %}</p>{% endif %}
+      <p class="mb-1 small"><b>Description:</b> {{ em.description|default:"-" }}</p>
+      {% if em.symptoms %}<p class="mb-1 small"><b>Reported symptoms:</b> {{ em.symptoms }}</p>{% endif %}
+      <p class="mb-1 small"><b>Reported condition:</b> {{ em.get_patient_condition_display }}{% if em.seizure %} · <span class="text-danger">seizure</span>{% endif %}{% if em.head_injury %} · <span class="text-danger">head injury</span>{% endif %}
+        · <b>Services:</b> {% if em.request_ambulance %}ambulance{% endif %}{% if em.request_ambulance and em.request_medical_advice %} + {% endif %}{% if em.request_medical_advice %}<span class="text-primary fw-semibold">medical advice requested</span>{% endif %}</p>
+      <p class="mb-1 small"><b>Location:</b> {{ em.latitude|floatformat:5 }}, {{ em.longitude|floatformat:5 }} · {{ em.get_location_source_display }}{% if em.location_accuracy_m %} (±{{ em.location_accuracy_m|floatformat:0 }} m){% endif %}{% if em.location_description %} · {{ em.location_description }}{% endif %}</p>
+      <p class="mb-1 small"><b>Priority:</b> {{ em.priority }} · {% if em.triage_method == 'ml_model' %}AI model, confidence {{ em.ai_confidence }}{% elif em.triage_method == 'rule_fallback' %}<span class="text-warning">AI unavailable - rule-based fallback</span>{% else %}set by operator{% endif %}{% if em.priority_overridden %} · <i>overridden</i>{% endif %}</p>
+      <p class="mb-1"><b>Vital signs:</b> {% with v=em.vitals.first %}{% include "monitoring/_vitals.html" with r=v %}{% if v %} <span class="badge risk-{{ v.risk }}">NEWS2 {{ v.news2_score }}</span>{% endif %}{% endwith %} · <a href="{% url 'vitals_detail' em.reference %}">open monitor</a></p>
+      <p class="mb-1"><b>Hospital:</b> {{ em.assigned_hospital.name|default:"-" }}</p>
+      <p class="mb-0"><b>Ambulance:</b> {{ em.assigned_ambulance.plate_number|default:"none" }}
+        {% if em.assigned_ambulance %}({{ em.assigned_ambulance.get_ambulance_type_display }}, {{ em.ambulance_distance_km }} km, ETA {{ em.eta_minutes }} min){% endif %}
+        {% if em.status == 'pending' %}<span class="text-muted small"> · {{ available_ambulances }} available now</span>{% endif %}</p>
+    </div>
+    <div class="card mb-3"><div class="card-header">AI hospital recommendations (decision support)</div>
+      <div class="table-responsive"><table class="table table-sm mb-0"><tr><th>Hospital</th><th>Score</th><th>km</th><th>ETA</th><th>Why</th></tr>
+      {% for r in em.recommendations %}<tr><td>{{ r.name }}</td><td>{{ r.score }}</td><td>{{ r.distance_km }}</td><td>{{ r.eta_minutes }}m</td><td><small>{{ r.reasons|join:" · " }}</small></td></tr>
+      {% empty %}<tr><td colspan="5" class="small text-muted">No recommendation (AI unavailable or no hospital in range with capacity). Choose a hospital manually.</td></tr>{% endfor %}</table></div></div>
+    <div class="card p-3 d-flex flex-wrap gap-3">
+      {% if next_statuses %}
+      <form method="post" action="{% url 'emergency_action' em.id %}" class="d-flex gap-1 flex-wrap">{% csrf_token %}
+        <input type="hidden" name="action" value="status">
+        <select name="status" class="form-select form-select-sm w-auto">{% for s, label in next_statuses %}<option value="{{ s }}">{{ label }}</option>{% endfor %}</select>
+        <input name="note" class="form-control form-control-sm w-auto" placeholder="note (optional)" maxlength="200">
+        <button class="btn btn-sm btn-primary">Update status</button></form>
+      {% endif %}
+      {% if can_dispatch %}
+      <form method="post" action="{% url 'emergency_action' em.id %}" class="d-flex gap-1">{% csrf_token %}
+        <input type="hidden" name="action" value="priority">
+        <select name="priority" class="form-select form-select-sm w-auto">{% for v,l in priorities %}<option value="{{ v }}" {% if v == em.priority %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+        <button class="btn btn-sm btn-warning">Override priority</button></form>
+      {% if em.status == 'pending' or em.status == 'assigned' %}
+      <form method="post" action="{% url 'emergency_action' em.id %}" class="d-flex gap-1">{% csrf_token %}
+        <input type="hidden" name="action" value="dispatch">
+        <select name="hospital_id" class="form-select form-select-sm w-auto"><option value="">AI choice</option>
+          {% for h in hospitals %}<option value="{{ h.id }}" {% if h.id == em.assigned_hospital_id %}selected{% endif %}>{{ h.name }}</option>{% endfor %}</select>
+        <button class="btn btn-sm btn-danger">{% if em.assigned_ambulance %}Re-dispatch{% else %}Dispatch ambulance{% endif %}</button></form>
+      {% endif %}
+      {% if em.assigned_ambulance.location_is_simulated and em.status in 'assigned en_route transporting' %}
+      <form method="post" action="{% url 'emergency_action' em.id %}">{% csrf_token %}<input type="hidden" name="action" value="simulate">
+        <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-skip-forward"></i> Simulate ambulance movement</button></form>
+      {% endif %}{% endif %}
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-2 mb-3"><div id="map" class="map-sm"></div>
+      {% if em.assigned_ambulance %}<small class="text-muted px-2">Ambulance position: {% if em.assigned_ambulance.location_is_simulated %}SIMULATED{% else %}live crew GPS{% endif %}</small>{% endif %}</div>
+    <div class="card mb-3"><div class="card-header">Timeline</div><ul class="list-group list-group-flush">
+      {% for l in logs %}<li class="list-group-item small"><b>{{ l.status }}</b> - {{ l.note }} <span class="text-muted">{{ l.by.username|default:"system" }}</span><span class="text-muted float-end">{{ l.at|date:"H:i:s" }}</span></li>{% endfor %}
+    </ul></div>
+    {% if assignments %}<div class="card mb-3"><div class="card-header">Ambulance assignments</div><ul class="list-group list-group-flush">
+      {% for a in assignments %}<li class="list-group-item small">{{ a.ambulance.plate_number }} · {{ a.distance_km }} km · {{ a.get_outcome_display }} · {{ a.assigned_at|date:"H:i" }}{% if a.released_at %}-{{ a.released_at|date:"H:i" }}{% endif %}</li>{% endfor %}
+    </ul></div>{% endif %}
+    <div class="card"><div class="card-header">Notifications sent for this emergency</div><ul class="list-group list-group-flush">
+      {% for n in notifications %}<li class="list-group-item small"><span class="badge bg-light text-dark">{{ n.get_channel_display }}</span> {% if n.recipient %}{{ n.recipient.username }}{% elif n.hospital %}{{ n.hospital.name }}{% endif %} {{ n.destination }} - <b>{{ n.title }}</b> <span class="badge {% if n.delivery_status == 'sent' %}bg-success{% elif n.delivery_status == 'simulated' %}badge-sim{% else %}bg-warning text-dark{% endif %}">{{ n.get_delivery_status_display }}</span></li>
+      {% empty %}<li class="list-group-item small text-muted">None.</li>{% endfor %}
+    </ul></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const map = App.tiles(L.map('map').setView([{{ em.latitude }}, {{ em.longitude }}], 13));
+const pts = [[{{ em.latitude }}, {{ em.longitude }}]];
+L.marker(pts[0], {icon: App.icon('bi-person-fill', '#b42318')}).addTo(map).bindPopup('Patient');
+{% if em.assigned_ambulance %}const ap = [{{ em.assigned_ambulance.latitude }}, {{ em.assigned_ambulance.longitude }}]; pts.push(ap);
+L.marker(ap, {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map).bindPopup("{{ em.assigned_ambulance.plate_number|escapejs }}");
+L.polyline([ap, pts[0]], {color: '#e8590c', dashArray: '6'}).addTo(map);{% endif %}
+{% if em.assigned_hospital %}const hp = [{{ em.assigned_hospital.latitude }}, {{ em.assigned_hospital.longitude }}]; pts.push(hp);
+L.marker(hp, {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map).bindPopup("{{ em.assigned_hospital.name|escapejs }}");
+L.polyline([pts[0], hp], {color: '#1d4ed8'}).addTo(map);{% endif %}
+if (pts.length > 1) map.fitBounds(pts, {padding: [30, 30]});
+</script>
+{% endblock %}

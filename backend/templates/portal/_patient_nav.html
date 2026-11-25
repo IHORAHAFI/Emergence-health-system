@@ -1,0 +1,9 @@
+{% load i18n %}{# Patient service cards: the patient's main navigation (emergency help is the red bar at the top of the dashboard). Every card uses an existing URL. #}
+<nav class="pnav" aria-label="{% translate 'My services' %}">
+  {% url 'patient_tests' as u %}{% translate "Medical tests and results" as t %}{% translate "Request a test, see results" as d %}{% include "portal/_pnav_card.html" with href=u icon="bi-clipboard2-pulse" title=t desc=d badge=open_tests %}
+  {% url 'hospitals' as u %}{% translate "Hospitals near me" as t %}{% translate "Find the closest care" as d %}{% include "portal/_pnav_card.html" with href=u icon="bi-hospital" title=t desc=d %}
+  {% url 'disease_list' as u %}{% translate "Diseases and conditions" as t %}{% translate "Symptoms and first aid" as d %}{% include "portal/_pnav_card.html" with href=u icon="bi-journal-medical" title=t desc=d %}
+  {% url 'assistant' as u %}{% translate "Ask a health question" as t %}{% translate "AI health assistant" as d %}{% include "portal/_pnav_card.html" with href=u icon="bi-chat-square-heart" title=t desc=d %}
+  {% url 'notifications' as u %}{% translate "Messages" as t %}{% translate "Updates from your care team" as d %}{% include "portal/_pnav_card.html" with href=u icon="bi-chat-left-text" title=t desc=d badge=unread_count red=True %}
+  {% url 'profile' as u %}{% translate "My profile and settings" as t %}{% translate "Personal and medical details" as d %}{% include "portal/_pnav_card.html" with href=u icon="bi-person" title=t desc=d %}
+</nav>

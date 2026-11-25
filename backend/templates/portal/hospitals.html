@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Nearby hospitals{% endblock %}
+{% block page_title %}Nearby hospitals{% endblock %}
+{% block content %}
+<div class="card p-3 mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4"><label class="form-label small mb-0" for="type">Type of emergency (for the recommendation)</label>
+      <select id="type" class="form-select">{% for v, l in types %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></div>
+    <div class="col-md-8 d-flex gap-2">
+      <button class="btn btn-danger" id="btn-gps"><i class="bi bi-crosshair"></i> Use my GPS location</button>
+      <span class="small text-muted align-self-center" id="loc">…or click on the map to choose a location.</span>
+    </div>
+  </div>
+</div>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card p-2"><div id="map" class="map"></div></div></div>
+  <div class="col-lg-5">
+    <div class="card mb-3"><div class="card-header">AI recommended for this emergency</div><ul class="list-group list-group-flush" id="rec"><li class="list-group-item small text-muted">Choose a location first.</li></ul></div>
+    <div class="card"><div class="card-header">Nearest hospitals</div><ul class="list-group list-group-flush" id="near"></ul></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const map = App.tiles(L.map('map').setView([-1.9536, 30.0606], 12));
+const layer = L.layerGroup().addTo(map); let me = null, last = null;
+async function load(lat, lng) {
+  last = [lat, lng];
+  if (!me) me = L.marker([lat, lng], {icon: App.icon('bi-person-fill', '#b42318')}).addTo(map); else me.setLatLng([lat, lng]);
+  const r = await fetch(`{% url 'hospitals_json' %}?lat=${lat}&lng=${lng}&type=${document.getElementById('type').value}`);
+  const d = await r.json(), E = App.esc;
+  if (!r.ok) { document.getElementById('loc').innerText = d.error; return; }
+  layer.clearLayers();
+  d.nearby.forEach(h => L.marker(h.pos, {icon: App.icon('bi-hospital-fill', h.emergency_unit ? '#1d4ed8' : '#98a2b3')}).addTo(layer)
+    .bindPopup(`<b>${E(h.name)}</b><br>${h.distance_km} km · ${E(h.level)}<br>${h.services.map(E).join(', ')}<br>${h.phone ? 'Tel ' + E(h.phone) : ''}`));
+  document.getElementById('near').innerHTML = d.nearby.map(h => `<li class="list-group-item small"><b>${E(h.name)}</b> · ${h.distance_km} km
+    ${h.emergency_unit ? '<span class="badge bg-success">Emergency unit</span>' : '<span class="badge bg-secondary">No emergency unit</span>'}<br>
+    <span class="text-muted">${h.services.map(E).join(', ')} · ${h.beds} beds ${h.capacity_verified ? '(verified)' : '(simulated / unverified)'}</span>
+    ${h.phone ? `<br><a href="tel:${E(h.phone)}">${E(h.phone)}</a>` : ''}</li>`).join('');
+  document.getElementById('rec').innerHTML = !d.ai_available ? '<li class="list-group-item small text-warning">AI recommendation unavailable - use the distance list.</li>'
+    : (d.recommended.map((h, i) => `<li class="list-group-item small"><b>${i + 1}. ${E(h.name)}</b> (score ${h.score})<br><span class="text-muted">${h.reasons.map(E).join(' · ')}</span></li>`).join('')
+       || '<li class="list-group-item small">No suitable hospital with capacity within range.</li>');
+  map.fitBounds([[lat, lng], ...d.nearby.slice(0, 4).map(h => h.pos)], {padding: [30, 30]});
+}
+document.getElementById('btn-gps').onclick = () => {
+  if (!navigator.geolocation) return document.getElementById('loc').innerText = 'GPS not supported - click the map.';
+  navigator.geolocation.getCurrentPosition(p => { document.getElementById('loc').innerText = 'Using your GPS location (not stored).'; load(p.coords.latitude, p.coords.longitude); },
+    () => document.getElementById('loc').innerText = 'Location permission denied or unavailable - click the map instead.', {timeout: 15000});
+};
+map.on('click', e => { document.getElementById('loc').innerText = 'Using the location you clicked.'; load(e.latlng.lat, e.latlng.lng); });
+document.getElementById('type').onchange = () => last && load(...last);
+</script>
+{% endblock %}

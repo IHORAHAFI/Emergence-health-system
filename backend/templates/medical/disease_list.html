@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Medical information{% endblock %}
+{% block page_title %}Medical information{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1>Medical information</h1><p class="subtitle">Plain-language summaries of trusted public sources (WHO, NHS). For information only - not a diagnosis or treatment plan.</p></div>
+  {% if reviewer %}<a class="btn btn-primary" href="{% url 'disease_new' %}"><i class="bi bi-plus-lg"></i> Add entry</a>{% endif %}
+</div>
+<div class="emergency-banner mb-3"><i class="bi bi-exclamation-triangle-fill"></i> If you or someone else has emergency warning signs, do not keep reading - {% if user.role == 'patient' %}<a class="fw-bold text-danger" href="{% url 'request_emergency' %}">request emergency help</a> or {% endif %}call <b>{{ hotline }}</b>.</div>
+{% if reviewer and pending_count %}<div class="alert alert-info small"><i class="bi bi-info-circle"></i> <b>{{ pending_count }}</b> entr{{ pending_count|pluralize:"y is,ies are" }} pending clinical review and hidden from patients. <a href="?review=pending">Review them</a>.</div>{% endif %}
+{% if not reviewer and hidden_count and not page.paginator.count %}<div class="alert alert-secondary small">Entries are published after a healthcare professional reviews them. None have been reviewed yet - please check back later.</div>{% endif %}
+<div class="row g-3">
+  <div class="col-lg-3">
+    <form method="get" class="card p-3 mb-3"><label class="form-label" for="q">Search diseases and conditions</label>
+      <div class="input-group"><input class="form-control" id="q" name="q" value="{{ q }}" placeholder="e.g. fever, malaria"><button class="btn btn-navy" aria-label="Search"><i class="bi bi-search"></i></button></div>
+      {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+    </form>
+    <div class="card p-2"><div class="section-title px-2 pt-2">Categories</div>
+      <a class="cat-link {% if not category %}active{% endif %}" href="?{% if q %}q={{ q|urlencode }}{% endif %}">All categories</a>
+      {% for c, label, n in categories %}<a class="cat-link {% if category == c %}active{% endif %}" href="?category={{ c }}{% if q %}&q={{ q|urlencode }}{% endif %}"><span>{{ label }}</span><span class="text-muted small">{{ n }}</span></a>{% endfor %}
+    </div>
+  </div>
+  <div class="col-lg-9">
+    <div class="row g-3">
+    {% for d in page %}
+      <div class="col-md-6 col-xl-4"><a href="{% url 'disease_detail' d.slug %}" class="text-reset"><div class="card p-3 h-100 disease-card">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-1"><h2 class="h5 mb-0">{{ d.name }}</h2>{% if not d.is_reviewed %}<span class="badge bg-warning text-dark">pending review</span>{% endif %}</div>
+        <div class="small text-primary mb-2">{{ d.get_category_display }}</div>
+        <p class="small text-muted mb-2">{{ d.description|truncatechars:140 }}</p>
+        <div class="small mt-auto text-muted"><i class="bi bi-link-45deg"></i> {{ d.source_name }}</div>
+      </div></a></div>
+    {% empty %}<div class="col-12"><div class="card p-4 text-center text-muted">No entries found{% if q %} for "{{ q }}"{% endif %}. You can also <a href="{% url 'assistant' %}">ask the AI medical assistant</a>.</div></div>{% endfor %}
+    </div>
+    {% include "portal/_pager.html" %}
+  </div>
+</div>
+{% endblock %}

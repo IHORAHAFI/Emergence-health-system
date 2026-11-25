@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Hospitals{% endblock %}
+{% block page_title %}Hospital management{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1>Hospitals</h1><p class="subtitle">Bed numbers are shown as <b>verified</b> only when the hospital's own staff have confirmed them.</p></div>
+  {% if can_edit %}<a class="btn btn-primary" href="{% url 'hospital_new' %}"><i class="bi bi-plus-lg"></i> Add hospital</a>{% endif %}
+</div>
+<form class="card p-3 mb-3" method="get">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-5"><label class="form-label" for="q">Search</label><input class="form-control" id="q" name="q" value="{{ q }}" placeholder="Name or address"></div>
+    <div class="col-md-4"><label class="form-label" for="service">Service</label><select class="form-select" id="service" name="service"><option value="">Any service</option>{% for s in services %}<option value="{{ s.code }}" {% if request.GET.service == s.code %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+    <div class="col-md-2"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="ed" value="1" id="ed" {% if request.GET.ed == '1' %}checked{% endif %}><label class="form-check-label" for="ed">Emergency dept.</label></div></div>
+    <div class="col-md-1 d-grid"><button class="btn btn-navy"><i class="bi bi-search" aria-hidden="true"></i><span class="visually-hidden">Search</span></button></div>
+  </div>
+</form>
+<div class="row g-3">
+  <div class="col-xl-8">
+    <div class="row g-3">
+    {% for h in page %}
+      <div class="col-md-6"><div class="card p-3 h-100 disease-card">
+        <div class="d-flex justify-content-between gap-2"><h2 class="h5 mb-1"><a href="{% url 'hospital_detail' h.id %}">{{ h.name }}</a></h2>
+          {% if not h.is_active %}<span class="status-pill secondary">Closed</span>{% elif h.has_emergency_unit %}<span class="status-pill success">Emergency dept.</span>{% endif %}</div>
+        <p class="small text-muted mb-2">{{ h.get_level_display }}{% if h.address %} · {{ h.address }}{% endif %}</p>
+        <p class="small mb-2">{% if h.phone %}<i class="bi bi-telephone"></i> <a href="tel:{{ h.phone }}">{{ h.phone }}</a>{% endif %}{% if h.emergency_phone %} · ED <a href="tel:{{ h.emergency_phone }}">{{ h.emergency_phone }}</a>{% endif %}</p>
+        <div class="mb-2">{% for s in h.specialties.all %}<span class="badge bg-light text-dark border me-1">{{ s.name }}</span>{% empty %}<span class="small text-muted">No services listed</span>{% endfor %}</div>
+        <div class="d-flex justify-content-between small mt-auto pt-2 border-top">
+          <span>Beds <b>{{ h.available_beds }}</b>/{{ h.total_beds }} · ICU <b>{{ h.icu_available }}</b> {% if h.capacity_verified %}<span class="badge bg-success">verified</span>{% else %}<span class="badge badge-sim">unverified</span>{% endif %}</span>
+          {% if h.incoming %}<span class="text-danger fw-semibold"><i class="bi bi-truck-front"></i> {{ h.incoming }} incoming</span>{% endif %}
+        </div>
+      </div></div>
+    {% empty %}<div class="col-12"><div class="card p-4 text-center text-muted">No hospitals match your search.</div></div>{% endfor %}
+    </div>
+    {% include "portal/_pager.html" %}
+  </div>
+  <div class="col-xl-4"><div class="card p-2"><div id="map" class="map"></div></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const map = App.tiles(L.map('map').setView([-1.9536, 30.0606], 11));
+{% for h in all_hospitals %}L.marker([{{ h.latitude }}, {{ h.longitude }}], {icon: App.icon('bi-hospital-fill', '{% if h.is_active %}#1d6fd8{% else %}#98a2b3{% endif %}')}).addTo(map).bindPopup("<a href='{% url 'hospital_detail' h.id %}'>{{ h.name|escapejs }}</a>");
+{% endfor %}
+</script>
+{% endblock %}

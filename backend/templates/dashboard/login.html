@@ -1,0 +1,16 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Staff log in{% endblock %}
+{% block page_title %}Staff log in{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-4">
+  <div class="card shadow-sm"><div class="card-body">
+    <h2 class="h4 mb-3">Staff login</h2>
+    <form method="post">{% csrf_token %}
+      {% if form.errors %}<div class="alert alert-danger">Invalid username or password.</div>{% endif %}
+      <input class="form-control mb-2" name="username" placeholder="Username" required>
+      <input class="form-control mb-3" type="password" name="password" placeholder="Password" required>
+      <button class="btn btn-danger w-100">Login</button>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}My profile{% endblock %}
+{% block page_title %}My profile{% endblock %}
+{% block content %}
+<h2 class="h3">My profile</h2>
+<form method="post" class="row g-3">{% csrf_token %}
+  <div class="col-lg-5"><div class="card p-3"><h2 class="h5">Account</h2>
+    {% with form=uform %}{% include "portal/_form.html" %}{% endwith %}
+    <p class="small text-muted mb-0">Role: {{ user.get_role_display }}{% if user.hospital %} · {{ user.hospital.name }}{% endif %}
+      {% if user.role == 'hospital' and not user.is_approved %} · <span class="text-danger">awaiting approval</span>{% endif %}</p>
+  </div></div>
+  {% if pform %}
+  <div class="col-lg-7"><div class="card p-3"><h2 class="h5">Medical information &amp; emergency contact</h2>
+    <p class="small text-muted">Only shared with the responders and hospital handling your emergency.</p>
+    {% with form=pform %}{% include "portal/_form.html" %}{% endwith %}
+  </div></div>
+  {% endif %}
+  <div class="col-12"><button class="btn btn-danger">Save profile</button>
+    <a class="btn btn-link" href="{% url 'password_change' %}">Change password</a></div>
+</form>
+{% endblock %}

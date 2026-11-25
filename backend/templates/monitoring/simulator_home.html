@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Virtual patient simulator{% endblock %}
+{% block page_title %}Virtual patient simulator{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="bi bi-cpu"></i> Virtual patient simulator</h1>
+    <p class="subtitle">Demonstration environment: a fictional patient wears five virtual IoT devices that transmit <b>SIMULATED</b> vital signs through the same pipeline real devices use.</p></div>
+</div>
+<div class="alert alert-secondary small"><i class="bi bi-info-circle"></i> Scenarios are illustrative trajectories for demonstration, not predictions of real physiology. Simulated readings are always stored and displayed as <b>SIMULATED</b> and can only be attached to <b>simulated</b> emergencies.</div>
+
+<form method="post" class="row g-3" novalidate>{% csrf_token %}
+  <div class="col-lg-6">
+    <div class="card p-3 p-md-4 mb-3">
+      <h2 class="h5 mb-3"><span class="form-step">1</span>Patient</h2>
+      {% if patients %}
+      <label class="form-label" for="vp">Use an existing virtual patient</label>
+      <select class="form-select mb-3" name="virtual_patient" id="vp">
+        <option value="">- create a new virtual patient below -</option>
+        {% for p in patients %}<option value="{{ p.id }}">{{ p.patient_code }} · {{ p.full_name }}, {{ p.age }} y</option>{% endfor %}
+      </select>
+      {% endif %}
+      <div id="new-patient" class="row g-2">
+        <div class="col-md-8">{% include "_field.html" with f=form.full_name %}</div>
+        <div class="col-md-4">{% include "_field.html" with f=form.age %}</div>
+        <div class="col-md-4">{% include "_field.html" with f=form.gender %}</div>
+        <div class="col-md-4">{% include "_field.html" with f=form.weight_kg %}</div>
+        <div class="col-md-4">{% include "_field.html" with f=form.height_cm %}</div>
+        <div class="col-12">{% include "_field.html" with f=form.medical_history %}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3 p-md-4 mb-3">
+      <h2 class="h5 mb-3"><span class="form-step">2</span>Scenario</h2>
+      <div class="row g-2">
+        {% for key, sc in scenarios.items %}
+        <div class="col-md-6"><label class="form-check check-tile service-tile small h-100"><input type="radio" class="form-check-input" name="scenario" value="{{ key }}" {% if forloop.first %}checked{% endif %}> <b>{{ sc.label }}</b><br><span class="text-muted">{{ sc.description }}</span></label></div>
+        {% endfor %}
+      </div>
+      <div id="custom" class="border rounded p-2 mt-3 d-none">
+        <div class="section-title">Custom targets (leave blank to keep normal)</div>
+        <div class="row g-2">
+          {% for k, label in vital_labels %}<div class="col-6 col-md-4"><label class="form-label small" for="c_{{ k }}">{{ label }}</label><input class="form-control form-control-sm" type="number" step="0.1" name="custom_{{ k }}" id="c_{{ k }}"></div>{% endfor %}
+          <div class="col-6 col-md-4"><label class="form-label small" for="c_ramp">Reach it over (minutes)</label><input class="form-control form-control-sm" type="number" min="1" max="120" value="10" name="custom_ramp" id="c_ramp"></div>
+          <div class="col-6 col-md-8 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="custom_sudden" id="c_sudden"><label class="form-check-label small" for="c_sudden">Sudden change (jump straight to the targets)</label></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card p-3 p-md-4">
+      <h2 class="h5 mb-3"><span class="form-step">3</span>Emergency and speed</h2>
+      <label class="form-label" for="em">Emergency</label>
+      <select class="form-select mb-2" name="emergency" id="em">
+        <option value="">Create a new SIMULATED emergency (triage + ambulance dispatch run normally)</option>
+        {% for e in sim_emergencies %}<option value="{{ e.id }}">{{ e.reference }} · {{ e.get_emergency_type_display }} (simulated)</option>{% endfor %}
+      </select>
+      <label class="form-label" for="speed">Simulation speed</label>
+      <select class="form-select mb-3" name="speed" id="speed"><option value="0.5">0.5x (1 simulated minute every 4 s)</option><option value="1" selected>1x (every 2 s)</option><option value="2">2x (every 1 s)</option><option value="5">5x (every 0.4 s)</option></select>
+      <button class="btn btn-primary w-100"><i class="bi bi-play-circle"></i> Create simulation</button>
+    </div>
+  </div>
+</form>
+
+<div class="card mt-3"><div class="card-header">Simulation history</div><div class="table-responsive"><table class="table table-hover">
+  <thead><tr><th>#</th><th>Virtual patient</th><th>Scenario</th><th>Emergency</th><th>Status</th><th>Minute</th><th>Created</th></tr></thead><tbody>
+  {% for s in sessions %}<tr class="clickable" onclick="location='{% url 'sim_panel' s.id %}'"><td>{{ s.id }}</td><td>{{ s.virtual_patient.patient_code }} · {{ s.virtual_patient.full_name }}</td><td>{{ s.scenario }}</td><td class="small">{{ s.emergency.reference }}</td>
+    <td><span class="status-pill {% if s.status == 'running' %}success{% elif s.status == 'paused' %}warning{% else %}secondary{% endif %}">{{ s.get_status_display }}</span></td><td>{{ s.step }}</td><td class="small">{{ s.created_at|date:"d M H:i" }}</td></tr>
+  {% empty %}<tr><td colspan="7" class="text-center text-muted py-3">No simulations yet.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const custom = document.getElementById('custom'), vp = document.getElementById('vp');
+document.querySelectorAll('input[name=scenario]').forEach(r => r.onchange = () => custom.classList.toggle('d-none', r.value !== 'custom' || !r.checked));
+if (vp) vp.onchange = () => document.getElementById('new-patient').classList.toggle('d-none', !!vp.value);
+</script>
+{% endblock %}

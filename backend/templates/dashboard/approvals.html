@@ -1,0 +1,16 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Approvals{% endblock %}
+{% block page_title %}Approvals{% endblock %}
+{% block content %}
+<h2 class="h3">Healthcare professional approvals</h2>
+<p class="text-muted small">Verify the licence / staff number with the hospital before approving. Approved professionals can see patient information for emergencies sent to their hospital.</p>
+<div class="card"><table class="table table-sm align-middle mb-0">
+  <tr><th>User</th><th>Name</th><th>Hospital</th><th>Licence / staff no.</th><th>Phone</th><th>Registered</th><th></th></tr>
+  {% for u in pending %}<tr><td>{{ u.username }}</td><td>{{ u.get_full_name }}</td><td>{{ u.hospital.name|default:"-" }}</td><td>{{ u.professional_id }}</td><td>{{ u.phone }}</td><td class="small">{{ u.date_joined|date:"d M Y" }}</td>
+    <td><form method="post" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="user" value="{{ u.id }}">
+      <button name="decision" value="approve" class="btn btn-sm btn-success">Approve</button>
+      <button name="decision" value="reject" class="btn btn-sm btn-outline-danger" data-confirm="Reject and deactivate this account?">Reject</button></form></td></tr>
+  {% empty %}<tr><td colspan="7" class="text-muted">No pending registrations.</td></tr>{% endfor %}
+</table></div>
+{% if user.is_superuser %}<p class="small mt-2">Manage all users, hospitals and ambulances in the <a href="/admin/">admin site</a>.</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{% load static i18n %}<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline · Smart Medical Emergency</title>
+<link rel="stylesheet" href="{% static 'css/app.css' %}"><link rel="stylesheet" href="{% static 'css/design-v2.css' %}">
+<style>body{display:grid;place-items:center;min-height:100vh;padding:1rem;font-family:system-ui,sans-serif}.box{max-width:420px;text-align:center}.call{display:block;background:#b42318;color:#fff;font-size:1.6rem;font-weight:700;padding:1rem;border-radius:16px;text-decoration:none;margin:1rem 0}</style>
+</head>
+<body>
+<main class="box card p-4">
+  <h1 class="h4">{% translate "You are offline" %}</h1>
+  <p>{% translate "Requests cannot be sent without internet. In an emergency, call:" %}</p>
+  <a class="call" href="tel:{{ hotline }}">📞 {{ hotline }}</a>
+  <p class="small mb-2">{% translate "Health information you opened before is still available:" %}</p>
+  <a href="/medical/">{% translate "Diseases and conditions" %}</a>
+  <p class="small text-muted mt-3 mb-0"><button onclick="location.reload()" class="btn btn-sm btn-primary">{% translate "Try again" %}</button></p>
+</main>
+</body>
+</html>

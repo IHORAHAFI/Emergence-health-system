@@ -1,0 +1,14 @@
+{% load i18n %}{# Small vital tile (monitor style). v = one card from portal_views._vitals. No reading yet -> "+" opens the test request page. #}
+{% if v.value is not None %}
+<div class="rpm-tile{% if v.abnormal %} warn{% endif %}">
+  <span class="rpm-label"><i class="bi {{ v.icon }}" aria-hidden="true"></i> {{ v.label }}</span>
+  <span class="rpm-val">{{ v.value }}<small>{{ v.unit }}</small></span>
+  <span class="rpm-state">{% if v.abnormal %}{% translate "Check" %}{% else %}{% translate "Normal" %}{% endif %}{% if v.simulated %} · SIM{% endif %}</span>
+</div>
+{% else %}
+<a class="rpm-tile empty-tile" href="{% url 'patient_tests' %}">
+  <span class="rpm-label"><i class="bi {{ v.icon }}" aria-hidden="true"></i> {{ v.label }}</span>
+  <span class="rpm-plus" aria-hidden="true"><i class="bi bi-plus-lg"></i></span>
+  <span class="visually-hidden">{% translate "Measure" %}</span>
+</a>
+{% endif %}

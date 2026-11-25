@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Medical tests" %}{% endblock %}
+{% block page_title %}{% translate "Medical tests" %}{% endblock %}
+{% block content %}
+<p class="page-sub">{% translate "Choose a test. Results appear here automatically." %}</p>
+
+<div class="vitals-grid tests-grid mb-3">
+  {% for code, label, icon, unit, is_open, status in cards %}
+  <section class="card test-card" aria-labelledby="t-{{ code }}">
+    <span class="t-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
+    <h2 class="t-name" id="t-{{ code }}">{% include "_vital_short.html" with k=code %}</h2>
+    <span class="t-unit">{% if code == 'temperature' %}°C{% elif code == 'heart_rate' %}{% translate "beats/min" %}{% elif code == 'spo2' %}SpO₂ %{% elif code == 'blood_pressure' %}mmHg{% else %}{% translate "breaths/min" %}{% endif %}</span>
+    <details class="small"><summary class="text-muted">{% translate "What is this?" %}</summary>{% include "_vital_explain.html" with k=code %}</details>
+    <div class="mt-auto">
+      {% if is_open %}
+        <span class="status-pill {% if status == 'testing' %}primary{% elif status == 'accepted' %}info{% else %}warning{% endif %} w-100 justify-content-center py-2" role="status">
+          {% if status == 'testing' %}<span class="dot pulse" aria-hidden="true"></span>{% translate "In progress" %}{% elif status == 'accepted' %}{% translate "Accepted" %}{% else %}{% translate "Received" %}{% endif %}</span>
+      {% else %}
+        <form method="post" data-once>{% csrf_token %}<input type="hidden" name="test" value="{{ code }}">
+          <button class="btn btn-primary w-100"><i class="bi bi-plus-lg" aria-hidden="true"></i> {% translate "Request" %}<span class="visually-hidden">: {% include "_vital_short.html" with k=code %}</span></button></form>
+      {% endif %}
+    </div>
+  </section>
+  {% endfor %}
+  <section class="card test-card border-2" style="border-color:var(--accent-2)" aria-labelledby="t-all">
+    <span class="t-icon" style="background:var(--accent);color:#fff" aria-hidden="true"><i class="bi bi-clipboard2-check"></i></span>
+    <h2 class="t-name" id="t-all">{% translate "All vital signs" %}</h2>
+    <span class="t-unit">{% translate "5 measurements" %}</span>
+    <div class="mt-auto">
+      {% if all_open %}<span class="status-pill secondary w-100 justify-content-center py-2">{% translate "Test in progress" %}</span>
+      {% else %}<form method="post" data-once>{% csrf_token %}<input type="hidden" name="test" value="all">
+        <button class="btn btn-primary w-100"><i class="bi bi-plus-lg" aria-hidden="true"></i> {% translate "Request all" %}</button></form>{% endif %}
+    </div>
+  </section>
+</div>
+<p class="small text-muted mb-4"><i class="bi bi-info-circle" aria-hidden="true"></i> {% translate "Feeling very unwell? Use" %} <a href="{% url 'request_emergency' %}" class="text-danger fw-semibold">{% translate "Emergency help" %}</a> {% translate "or call" %} <a href="tel:{{ hotline }}" class="text-danger fw-semibold">{{ hotline }}</a>.</p>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <section class="card h-100" aria-labelledby="open-title"><div class="card-header d-flex justify-content-between align-items-center"><h2 class="h6 mb-0" id="open-title">{% translate "In progress" %}</h2><span class="live-tag" id="live-note" aria-live="polite"></span></div>
+      <ul class="list-group list-group-flush list-compact">
+      {% for r in open_requests %}<li class="list-group-item d-flex justify-content-between align-items-center gap-2" data-status="{{ r.reference }}" data-code="{{ r.status }}">
+        <a class="fw-semibold text-decoration-none" href="{% url 'patient_test_detail' r.reference %}">{{ r.test_names }}<span class="d-block small text-muted fw-normal">{{ r.requested_at|date:"d M, H:i" }}</span></a>
+        <span class="status-pill {% if r.status == 'testing' %}primary{% elif r.status == 'accepted' %}info{% else %}warning{% endif %}">{% if r.status == 'testing' %}{% translate "In progress" %}{% elif r.status == 'accepted' %}{% translate "Accepted" %}{% else %}{% translate "Received" %}{% endif %}</span></li>
+      {% empty %}<li class="list-group-item"><div class="empty"><i class="bi bi-hourglass" aria-hidden="true"></i>{% translate "Nothing in progress." %}</div></li>{% endfor %}
+      </ul></section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card h-100" aria-labelledby="hist-title"><div class="card-header"><h2 class="h6 mb-0" id="hist-title">{% translate "History" %}</h2></div>
+      <ul class="list-group list-group-flush list-compact">
+      {% for r in history %}<li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+        <a class="fw-semibold text-decoration-none" href="{% url 'patient_test_detail' r.reference %}">{{ r.test_names }}<span class="d-block small text-muted fw-normal">{{ r.requested_at|date:"d M Y" }}</span></a>
+        <span class="status-pill {% if r.status == 'completed' %}success{% else %}secondary{% endif %}">{% if r.status == 'completed' %}{% translate "Results ready" %}{% else %}{% translate "Cancelled" %}{% endif %}</span></li>
+      {% empty %}<li class="list-group-item"><div class="empty"><i class="bi bi-clock-history" aria-hidden="true"></i>{% translate "No tests yet." %}</div></li>{% endfor %}
+      </ul>
+      {% include "portal/_pager.html" with page=history %}
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// statuses update by themselves (WebSocket nudge + polling); reload when anything changes
+const shown = Object.fromEntries([...document.querySelectorAll('[data-status]')].map(e => [e.dataset.status, e.dataset.code]));
+const refs = Object.keys(shown);
+if (refs.length) App.live(async () => {
+  for (const ref of refs) {
+    const r = await fetch(`/patient/tests/${encodeURIComponent(ref)}/data.json`, {credentials: 'same-origin'});
+    if (r.ok && (await r.json()).status !== shown[ref]) { location.reload(); return; }
+  }
+}, {onStatus: s => document.getElementById('live-note').innerHTML = s === 'live' ? '<span class="dot pulse" aria-hidden="true"></span>{% translate "Live" %}' : '{% translate "Auto-refresh" %}'});
+</script>
+{% endblock %}

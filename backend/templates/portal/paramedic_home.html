@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}My ambulance{% endblock %}
+{% block page_title %}My ambulance{% endblock %}
+{% block content %}
+{% if not amb %}
+<div class="alert alert-warning">No ambulance is linked to your account. Ask an administrator to assign you as its crew.</div>
+{% else %}
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card p-3 mb-3">
+      <h2 class="h4">{{ amb.plate_number }} <small class="text-muted">{{ amb.get_ambulance_type_display }}</small></h2>
+      <p class="mb-2">Status: <b>{{ amb.get_status_display }}</b> {% if amb.location_is_simulated %}<span class="badge badge-sim">position simulated</span>{% else %}<span class="badge bg-success">live GPS</span>{% endif %}</p>
+      <div class="d-flex flex-wrap gap-2">
+        {% if not em %}
+        <form method="post" action="{% url 'paramedic_action' %}">{% csrf_token %}<input type="hidden" name="action" value="availability">
+          <button class="btn btn-sm {% if amb.status == 'available' %}btn-outline-secondary{% else %}btn-success{% endif %}">{% if amb.status == 'available' %}Go out of service{% else %}Mark available{% endif %}</button></form>
+        {% endif %}
+        <form method="post" action="{% url 'paramedic_action' %}" id="gps-form">{% csrf_token %}<input type="hidden" name="action" value="location">
+          <input type="hidden" name="lat"><input type="hidden" name="lng">
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-gps"><i class="bi bi-broadcast"></i> Send my live GPS position</button></form>
+      </div>
+      <div class="small text-muted mt-1" id="gps-msg"></div>
+    </div>
+    {% if em %}
+    <div class="card p-3 border-start border-5 border-danger">
+      <h2 class="h5">Current emergency {{ em.reference }} <span class="badge prio-{{ em.priority }}">{{ em.priority }}</span></h2>
+      <p class="small mb-1"><b>{{ em.get_emergency_type_display }}</b> · {{ em.get_status_display }}</p>
+      <p class="small mb-1">Patient: {{ em.patient.get_full_name|default:em.patient.username }}{% if em.age %}, age {{ em.age }}{% endif %} · conscious: {{ em.conscious|yesno }} · breathing difficulty: {{ em.breathing_difficulty|yesno }} · bleeding: {{ em.severe_bleeding|yesno }}</p>
+      <p class="small mb-1">Call: <a href="tel:{{ em.contact_phone }}">{{ em.contact_phone|default:"-" }}</a> · {{ em.location_description }}</p>
+      <p class="small mb-2">Take patient to: <b>{{ em.assigned_hospital.name|default:"to be decided" }}</b></p>
+      <p class="small">{{ em.description }}</p>
+      <p><a class="btn btn-sm btn-outline-danger" href="{% url 'vitals_measure' em.reference %}"><i class="bi bi-activity"></i> Record vital signs</a>
+         <a class="btn btn-sm btn-outline-secondary" href="{% url 'vitals_detail' em.reference %}">View vitals</a></p>
+      <form method="post" action="{% url 'paramedic_action' %}" class="d-flex flex-wrap gap-2">{% csrf_token %}
+        <input type="hidden" name="action" value="status"><input type="hidden" name="emergency" value="{{ em.id }}">
+        {% for s, label in next_statuses %}<button name="status" value="{{ s }}" class="btn btn-sm {% if s == 'cancelled' %}btn-outline-secondary{% else %}btn-danger{% endif %}">{{ label }}</button>{% endfor %}
+      </form>
+    </div>
+    {% else %}<div class="card p-3 text-muted">No active emergency assigned to your ambulance.</div>{% endif %}
+  </div>
+  <div class="col-lg-7"><div class="card p-2"><div id="map" class="map"></div></div></div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if amb %}
+<script>
+const map = App.tiles(L.map('map').setView([{{ amb.latitude }}, {{ amb.longitude }}], 13));
+const pts = [[{{ amb.latitude }}, {{ amb.longitude }}]];
+L.marker(pts[0], {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map).bindPopup('My ambulance');
+{% if em %}pts.push([{{ em.latitude }}, {{ em.longitude }}]); L.marker(pts[1], {icon: App.icon('bi-person-fill', '#b42318')}).addTo(map).bindPopup('Patient');
+{% if em.assigned_hospital %}pts.push([{{ em.assigned_hospital.latitude }}, {{ em.assigned_hospital.longitude }}]); L.marker(pts[2], {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map);{% endif %}
+map.fitBounds(pts, {padding: [40, 40]});{% endif %}
+document.getElementById('btn-gps').onclick = () => {
+  const msg = document.getElementById('gps-msg');
+  if (!navigator.geolocation) return msg.innerText = 'GPS not supported on this device.';
+  msg.innerText = 'Getting GPS fix…';
+  navigator.geolocation.getCurrentPosition(p => { const f = document.getElementById('gps-form'); f.lat.value = p.coords.latitude; f.lng.value = p.coords.longitude; f.submit(); },
+    () => msg.innerText = 'Location permission denied or unavailable.', {enableHighAccuracy: true, timeout: 15000});
+};
+</script>{% endif %}{% endblock %}

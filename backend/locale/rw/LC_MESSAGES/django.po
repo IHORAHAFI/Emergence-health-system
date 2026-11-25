@@ -1,0 +1,987 @@
+# DRAFT translation written by an AI assistant - must be reviewed by a native speaker.
+# Medical explanations are intentionally left untranslated (shown in English).
+msgid ""
+msgstr ""
+"Project-Id-Version: smart-medical-emergency\n"
+"Language: rw\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Please confirm"
+msgstr "Emeza"
+
+msgid "Close"
+msgstr "Funga"
+
+msgid "No, go back"
+msgstr "Oya, subira inyuma"
+
+msgid "Yes, continue"
+msgstr "Yego, komeza"
+
+msgid ""
+"We received your request. We are finding the nearest available ambulance."
+msgstr "Twakiriye ubusabe bwawe. Turimo gushaka imbangukiragutabara iri hafi."
+
+msgid "An ambulance has been chosen for you. The crew is being alerted."
+msgstr ""
+"Imbangukiragutabara yagutoranyirijwe. Abakozi bayo barimo kumenyeshwa."
+
+msgid "The ambulance is on its way to you."
+msgstr "Imbangukiragutabara iri mu nzira iza aho uri."
+
+msgid "The ambulance crew has arrived."
+msgstr "Abakozi b'imbangukiragutabara bahageze."
+
+msgid "You are being taken to the hospital."
+msgstr "Urimo kujyanwa ku bitaro."
+
+msgid "You have arrived at the hospital."
+msgstr "Wageze ku bitaro."
+
+msgid "This emergency is closed."
+msgstr "Iki kibazo cyihutirwa cyarangiye."
+
+msgid "This emergency request was cancelled."
+msgstr "Ubu busabe bwihutirwa bwahagaritswe."
+
+msgid "Language"
+msgstr "Ururimi"
+
+msgid "Change"
+msgstr "Hindura"
+
+msgid "Main menu"
+msgstr "Ibikubiyemo by'ingenzi"
+
+msgid "Get emergency help"
+msgstr "Saba ubutabazi bwihuse"
+
+msgid "My dashboard"
+msgstr "Ahabanza hanjye"
+
+msgid "Medical tests and results"
+msgstr "Ibipimo by'ubuzima n'ibisubizo"
+
+msgid "Hospitals near me"
+msgstr "Ibitaro biri hafi yanjye"
+
+msgid "My ambulance"
+msgstr "Imbangukiragutabara yanjye"
+
+msgid "Hospitals"
+msgstr "Ibitaro"
+
+msgid "Dashboard"
+msgstr "Ahabanza"
+
+msgid "Emergency requests"
+msgstr "Ubusabe bwihutirwa"
+
+msgid "Patient test requests"
+msgstr "Ubusabe bw'ibipimo bw'abarwayi"
+
+msgid "Vital signs"
+msgstr "Ibimenyetso by'ubuzima"
+
+msgid "Vital-sign alerts"
+msgstr "Imiburo y'ibimenyetso by'ubuzima"
+
+msgid "Patients"
+msgstr "Abarwayi"
+
+msgid "Ambulances"
+msgstr "Imbangukiragutabara"
+
+msgid "IoT simulator (demo)"
+msgstr "Igeragezwa rya IoT (demo)"
+
+msgid "Bed capacity"
+msgstr "Ibitanda bihari"
+
+msgid "Health information"
+msgstr "Amakuru ku buzima"
+
+msgid "Diseases and conditions"
+msgstr "Indwara n'ibibazo by'ubuzima"
+
+msgid "Ask a health question"
+msgstr "Baza ikibazo ku buzima"
+
+msgid "Management"
+msgstr "Imicungire"
+
+msgid "Reports"
+msgstr "Raporo"
+
+msgid "Activity log"
+msgstr "Urutonde rw'ibikorwa"
+
+msgid "Approve staff accounts"
+msgstr "Emeza konti z'abakozi"
+
+msgid "Users"
+msgstr "Abakoresha"
+
+msgid "System settings (database)"
+msgstr "Igenamiterere rya sisitemu"
+
+msgid "My account"
+msgstr "Konti yanjye"
+
+msgid "Messages"
+msgstr "Ubutumwa"
+
+msgid "My profile and settings"
+msgstr "Umwirondoro wanjye n'igenamiterere"
+
+msgid "Log out"
+msgstr "Sohoka"
+
+msgid "Received"
+msgstr "Byakiriwe"
+
+msgid "Your request has been received. Please wait for medical staff."
+msgstr "Ubusabe bwawe bwakiriwe. Tegereza abakozi b'ubuvuzi."
+
+msgid "Accepted"
+msgstr "Byemewe"
+
+msgid "Medical staff have your request. The test will start soon."
+msgstr "Abakozi b'ubuvuzi babonye ubusabe bwawe. Igipimo kiratangira vuba."
+
+msgid "In progress"
+msgstr "Birakomeje"
+
+msgid "Your medical test is now in progress. Results appear automatically."
+msgstr "Igipimo cyawe kirimo gukorwa. Ibisubizo biraza ubwabyo."
+
+msgid "Results ready"
+msgstr "Ibisubizo byabonetse"
+
+msgid "Your test results are available."
+msgstr "Ibisubizo by'igipimo cyawe byabonetse."
+
+msgid "Cancelled"
+msgstr "Byahagaritswe"
+
+msgid "This request was cancelled. No results."
+msgstr "Ubu busabe bwahagaritswe. Nta bisubizo."
+
+msgid "Body temperature (°C)"
+msgstr "Ubushyuhe bw'umubiri (°C)"
+
+msgid "Heart rate (beats per minute)"
+msgstr "Umuvuduko w'umutima (inshuro ku munota)"
+
+msgid "Oxygen level (SpO₂ %)"
+msgstr "Igipimo cy'umwuka wa ogisijeni (SpO₂ %)"
+
+msgid "Blood pressure (mmHg)"
+msgstr "Umuvuduko w'amaraso (mmHg)"
+
+msgid "Blood pressure - top number (mmHg)"
+msgstr "Umuvuduko w'amaraso - umubare wo hejuru (mmHg)"
+
+msgid "Blood pressure - bottom number (mmHg)"
+msgstr "Umuvuduko w'amaraso - umubare wo hasi (mmHg)"
+
+msgid "Breathing rate (breaths per minute)"
+msgstr "Umuvuduko wo guhumeka (inshuro ku munota)"
+
+msgid "Skip to main content"
+msgstr "Jya ku bikubiye by'ingenzi"
+
+msgid "Open menu"
+msgstr "Fungura ibikubiyemo"
+
+msgid "Menu"
+msgstr "Ibikubiyemo"
+
+msgid "Call"
+msgstr "Hamagara"
+
+msgid "waiting"
+msgstr "bitegereje"
+
+msgid "Notification sound"
+msgstr "Ijwi ry'imenyesha"
+
+msgid "Notifications"
+msgstr "Imenyesha"
+
+msgid "unread"
+msgstr "bitarasomwa"
+
+msgid "My profile"
+msgstr "Umwirondoro wanjye"
+
+msgid "Main"
+msgstr "Iby'ingenzi"
+
+msgid "Services"
+msgstr "Serivisi"
+
+msgid "How it works"
+msgstr "Uko bikora"
+
+msgid "Health questions"
+msgstr "Ibibazo ku buzima"
+
+msgid "Contact"
+msgstr "Twandikire"
+
+msgid "Log in"
+msgstr "Injira"
+
+msgid "Create account"
+msgstr "Fungura konti"
+
+msgid "Close message"
+msgstr "Funga ubutumwa"
+
+msgid ""
+"Academic prototype - decision support only, not a diagnosis. Simulated data "
+"is always labelled."
+msgstr ""
+"Igerageza ry'amashuri - rifasha gufata ibyemezo gusa, si isuzuma. Amakuru "
+"y'igerageza ahora agaragazwa."
+
+msgid "In a life-threatening emergency also call"
+msgstr "Mu gihe ubuzima buri mu kaga, hamagara na"
+
+msgid "academic prototype. Not a replacement for calling"
+msgstr "igerageza ry'amashuri. Ntisimbura guhamagara"
+
+msgid "Medical tests"
+msgstr "Ibipimo by'ubuzima"
+
+msgid "Request"
+msgstr "Ubusabe"
+
+msgid "asked for on"
+msgstr "bwasabwe ku wa"
+
+msgid "Cancel this request"
+msgstr "Hagarika ubu busabe"
+
+msgid "Progress"
+msgstr "Aho bigeze"
+
+msgid "1. Request sent"
+msgstr "1. Ubusabe bwoherejwe"
+
+msgid "2. Accepted by staff"
+msgstr "2. Bwemewe n'abakozi"
+
+msgid "3. Test in progress"
+msgstr "3. Igipimo kirakorwa"
+
+msgid "4. Results ready"
+msgstr "4. Ibisubizo byabonetse"
+
+msgid "Results are not available yet."
+msgstr "Ibisubizo ntibiraboneka."
+
+msgid ""
+"These are SIMULATED demonstration values, not real measurements of your "
+"body. Do not use them to make medical decisions."
+msgstr ""
+"Iyi ni imibare y'IGERAGEZA, si ibipimo nyabyo by'umubiri wawe. Ntuyikoreshe "
+"mu gufata ibyemezo by'ubuvuzi."
+
+msgid "How your values changed"
+msgstr "Uko imibare yawe yahindutse"
+
+msgid ""
+"Chart of your measurements over time. The same values are listed in the "
+"table below."
+msgstr ""
+"Igishushanyo cy'ibipimo byawe uko igihe gihita. Imibare imwe iri mu "
+"mbonerahamwe iri hepfo."
+
+msgid "All measurements"
+msgstr "Ibipimo byose"
+
+msgid "Time"
+msgstr "Isaha"
+
+msgid "Device"
+msgstr "Igikoresho"
+
+msgid "Measurement"
+msgstr "Igipimo"
+
+msgid "Source"
+msgstr "Inkomoko"
+
+msgid "Body temperature"
+msgstr "Ubushyuhe bw'umubiri"
+
+msgid "Heart rate"
+msgstr "Umuvuduko w'umutima"
+
+msgid "Oxygen level"
+msgstr "Igipimo cya ogisijeni"
+
+msgid "Blood pressure (top)"
+msgstr "Umuvuduko w'amaraso (hejuru)"
+
+msgid "Blood pressure (bottom)"
+msgstr "Umuvuduko w'amaraso (hasi)"
+
+msgid "Breathing rate"
+msgstr "Umuvuduko wo guhumeka"
+
+msgid "done"
+msgstr "byarangiye"
+
+msgid "not yet"
+msgstr "ntibiraba"
+
+msgid "Within the usual range"
+msgstr "Biri mu rugero rusanzwe"
+
+msgid "Outside the usual range - medical staff can see this"
+msgstr "Biri hanze y'urugero rusanzwe - abakozi b'ubuvuzi barabibona"
+
+msgid "SIMULATED"
+msgstr "IGERAGEZA"
+
+msgid "REAL"
+msgstr "NYAKURI"
+
+msgid "Updates automatically"
+msgstr "Bihinduka ubwabyo"
+
+msgid "Checking for updates every few seconds"
+msgstr "Turareba amakuru mashya buri masegonda make"
+
+msgid "Results are not available yet. Please wait for medical staff."
+msgstr "Ibisubizo ntibiraboneka. Tegereza abakozi b'ubuvuzi."
+
+msgid "Results are not available yet. The test will start soon."
+msgstr "Ibisubizo ntibiraboneka. Igipimo kiratangira vuba."
+
+msgid ""
+"The test is running. The first results will appear here in a few seconds."
+msgstr "Igipimo kirakorwa. Ibisubizo bya mbere biraza hano mu masegonda make."
+
+msgid "This request was cancelled. There are no results."
+msgstr "Ubu busabe bwahagaritswe. Nta bisubizo bihari."
+
+msgid "No measurements were recorded."
+msgstr "Nta gipimo cyabitswe."
+
+msgid ""
+"Choose what you want measured and press the blue button. Medical staff are "
+"told straight away. Your results will appear on this website by themselves -"
+" you do not need to do anything else."
+msgstr ""
+"Hitamo icyo ushaka gupimwa hanyuma ukande buto y'ubururu. Abakozi b'ubuvuzi "
+"bahita babimenyeshwa. Ibisubizo byawe biza kuri uru rubuga ubwabyo - nta "
+"kindi ugomba gukora."
+
+msgid "A test is not an emergency call. If you feel very unwell:"
+msgstr "Igipimo si uguhamagara ubutabazi. Niba wumva urembye cyane:"
+
+msgid "get emergency help"
+msgstr "saba ubutabazi bwihuse"
+
+msgid "or call"
+msgstr "cyangwa uhamagare"
+
+msgid "1. Choose a test"
+msgstr "1. Hitamo igipimo"
+
+msgid "Request this test"
+msgstr "Saba iki gipimo"
+
+msgid "All vital signs"
+msgstr "Ibimenyetso by'ubuzima byose"
+
+msgid ""
+"All five measurements together: temperature, heart rate, oxygen level, blood"
+" pressure and breathing rate. Choose this if you are not sure."
+msgstr ""
+"Ibipimo bitanu byose hamwe: ubushyuhe, umuvuduko w'umutima, ogisijeni, "
+"umuvuduko w'amaraso no guhumeka. Hitamo iki niba utazi neza."
+
+msgid ""
+"You already have a test in progress. You can request all vital signs when it"
+" is finished."
+msgstr ""
+"Usanzwe ufite igipimo kirimo gukorwa. Uzasaba ibipimo byose nikirangira."
+
+msgid "Request all vital signs"
+msgstr "Saba ibipimo byose"
+
+msgid "2. Follow your tests"
+msgstr "2. Kurikirana ibipimo byawe"
+
+msgid "Tests in progress"
+msgstr "Ibipimo birimo gukorwa"
+
+msgid "No tests in progress. Choose a test above."
+msgstr "Nta gipimo kirimo gukorwa. Hitamo igipimo hejuru."
+
+msgid "My test history"
+msgstr "Amateka y'ibipimo byanjye"
+
+msgid "Your emergency request is active"
+msgstr "Ubusabe bwawe bwihutirwa buracyakora"
+
+msgid "Reference"
+msgstr "Nimero"
+
+msgid "Ambulance"
+msgstr "Imbangukiragutabara"
+
+msgid "call the crew"
+msgstr "hamagara abakozi"
+
+msgid "Follow my ambulance"
+msgstr "Kurikirana imbangukiragutabara yanjye"
+
+msgid "Do you need urgent medical help?"
+msgstr "Ukeneye ubufasha bw'ubuvuzi bwihuse?"
+
+msgid ""
+"Press the red button. We will use your location to send the nearest "
+"ambulance. If someone is not breathing or is unconscious, call immediately."
+msgstr ""
+"Kanda buto itukura. Tuzakoresha aho uri kugira ngo twohereze "
+"imbangukiragutabara iri hafi. Niba hari umuntu udahumeka cyangwa wataye "
+"ubwenge, hamagara ako kanya."
+
+msgid "Get emergency help now"
+msgstr "Saba ubutabazi bwihuse ubu"
+
+msgid "What would you like to do?"
+msgstr "Urashaka gukora iki?"
+
+msgid "Request a medical test"
+msgstr "Saba igipimo cy'ubuzima"
+
+msgid ""
+"Temperature, heart rate, oxygen level, blood pressure or breathing rate."
+msgstr ""
+"Ubushyuhe, umuvuduko w'umutima, ogisijeni, umuvuduko w'amaraso cyangwa "
+"guhumeka."
+
+msgid "My test results"
+msgstr "Ibisubizo by'ibipimo byanjye"
+
+msgid "See your latest results and history."
+msgstr "Reba ibisubizo biheruka n'amateka."
+
+msgid "No tests yet."
+msgstr "Nta bipimo biraba."
+
+msgid "My emergency requests"
+msgstr "Ubusabe bwanjye bwihutirwa"
+
+msgid "new"
+msgstr "bishya"
+
+msgid "Updates about your requests and tests."
+msgstr "Amakuru ku busabe bwawe n'ibipimo."
+
+msgid "Find the closest hospitals and their phone numbers."
+msgstr "Shaka ibitaro biri hafi na nimero zabyo."
+
+msgid "Read about illnesses and when to get help. Or ask a health question."
+msgstr ""
+"Soma ku ndwara n'igihe cyo gusaba ubufasha. Cyangwa ubaze ikibazo ku buzima."
+
+msgid "My latest vital signs"
+msgstr "Ibimenyetso by'ubuzima biheruka"
+
+msgid "See details"
+msgstr "Reba birambuye"
+
+msgid "Outside the usual range - medical staff can see this."
+msgstr "Biri hanze y'urugero rusanzwe - abakozi b'ubuvuzi barabibona."
+
+msgid "demo value, not a real measurement"
+msgstr "umubare w'igerageza, si igipimo nyakuri"
+
+msgid "You have no measurements yet."
+msgstr "Nta bipimo urabona."
+
+msgid "My previous emergency requests"
+msgstr "Ubusabe bwanjye bwihutirwa bwabanje"
+
+msgid "Type"
+msgstr "Ubwoko"
+
+msgid "Status"
+msgstr "Aho bigeze"
+
+msgid "Date"
+msgstr "Itariki"
+
+msgid "No previous emergencies."
+msgstr "Nta busabe bwihutirwa bwabanje."
+
+msgid "My health profile"
+msgstr "Umwirondoro w'ubuzima bwanjye"
+
+msgid "Responders see this when you ask for help. Keep it up to date."
+msgstr "Abatabazi barabibona iyo usabye ubufasha. Jya ubivugurura."
+
+msgid "Age / gender"
+msgstr "Imyaka / igitsina"
+
+msgid "Blood group"
+msgstr "Ubwoko bw'amaraso"
+
+msgid "Allergies"
+msgstr "Allergies"
+
+msgid "Long-term illnesses"
+msgstr "Indwara zidakira"
+
+msgid "Emergency contact"
+msgstr "Uwo guhamagara mu byihutirwa"
+
+msgid ""
+"You have not filled in your health profile yet. It helps responders treat "
+"you safely."
+msgstr ""
+"Ntiwuzuza umwirondoro w'ubuzima bwawe. Ufasha abatabazi kukuvura neza."
+
+msgid "Update my profile"
+msgstr "Vugurura umwirondoro wanjye"
+
+msgid "Latest messages"
+msgstr "Ubutumwa buheruka"
+
+msgid "See all"
+msgstr "Reba byose"
+
+msgid "New"
+msgstr "Gishya"
+
+msgid "No messages yet."
+msgstr "Nta butumwa buraza."
+
+msgid ""
+"Your location is only used on this screen to sort hospitals by distance. It "
+"is not saved."
+msgstr ""
+"Aho uri hakoreshwa kuri iyi paji gusa mu gutondeka ibitaro hakurikijwe "
+"intera. Ntihabikwa."
+
+msgid "Show hospitals near me"
+msgstr "Erekana ibitaro biri hafi yanjye"
+
+msgid "This browser cannot share your location."
+msgstr "Iyi mushakisha ntishobora gutanga aho uri."
+
+msgid "Open the hospital map"
+msgstr "Fungura ikarita y'ibitaro"
+
+msgid "Waiting for your permission…"
+msgstr "Dutegereje uruhushya rwawe…"
+
+msgid "Emergency department"
+msgstr "Serivisi y'ubutabazi bwihuse"
+
+msgid "No hospitals registered."
+msgstr "Nta bitaro byanditswe."
+
+msgid "You did not allow location sharing."
+msgstr "Ntiwemeye gutanga aho uri."
+
+msgid "Open the hospital map and choose a place instead"
+msgstr "Fungura ikarita y'ibitaro uhitemo ahantu"
+
+msgid "None recorded"
+msgstr "Nta na kimwe cyanditswe"
+
+msgid "Welcome back, %(name)s"
+msgstr "Murakaza neza, %(name)s"
+
+msgid "AI assistant"
+msgstr "Umufasha wa AI"
+
+msgid "Track my emergency"
+msgstr "Kurikirana ubutabazi bwanjye"
+
+msgid "Request urgent medical assistance"
+msgstr "Saba ubufasha bwihuse bw'ubuvuzi"
+
+msgid "Vital signs and history"
+msgstr "Ibimenyetso by'ubuzima n'amateka"
+
+msgid "Request a test, see results"
+msgstr "Saba igipimo, urebe ibisubizo"
+
+msgid "Find the closest care"
+msgstr "Shaka ubuvuzi buri hafi"
+
+msgid "Symptoms and first aid"
+msgstr "Ibimenyetso n'ubutabazi bw'ibanze"
+
+msgid "AI health assistant"
+msgstr "Umufasha w'ubuzima wa AI"
+
+msgid "Updates from your care team"
+msgstr "Amakuru aturuka ku itsinda rikuvura"
+
+msgid "Personal and medical details"
+msgstr "Amakuru bwite n'ay'ubuzima"
+
+msgid "My vital monitor"
+msgstr "Igenzura ry'ibimenyetso byanjye"
+
+msgid "Last data"
+msgstr "Amakuru aheruka"
+
+msgid "Heart rate trend from your last readings"
+msgstr "Uko umutima wawe wateye mu bipimo biheruka"
+
+msgid "Trend of your last readings"
+msgstr "Uko ibipimo byawe biheruka byagenze"
+
+msgid "No signal"
+msgstr "Nta kimenyetso"
+
+msgid "Pulse oximeter"
+msgstr "Igipima umwuka mu maraso"
+
+msgid "Pulse"
+msgstr "Gutera k'umutima"
+
+msgid "My services"
+msgstr "Serivisi zanjye"
+
+msgid "Track ambulance"
+msgstr "Kurikirana imbangukiragutabara"
+
+msgid "Find hospitals"
+msgstr "Shaka ibitaro"
+
+msgid "Health check"
+msgstr "Isuzuma ry'ubuzima"
+
+msgid "My records"
+msgstr "Amakuru yanjye y'ubuzima"
+
+msgid "Hello, %(name)s"
+msgstr "Muraho, %(name)s"
+
+msgid "sent %(t)s ago"
+msgstr "byoherejwe hashize %(t)s"
+
+msgid "about %(m)s minutes away"
+msgstr "hasigaye iminota %(m)s"
+
+msgid "%(t)s ago"
+msgstr "hashize %(t)s"
+
+msgid "Is someone not breathing, unconscious or bleeding heavily?"
+msgstr "Hari umuntu udahumeka, wataye ubwenge cyangwa uva amaraso menshi?"
+
+msgid ""
+"Call now - it is the fastest way. You can fill in this form afterwards."
+msgstr "Hamagara ubu - ni bwo buryo bwihuse. Iyi fomu wayuzuza nyuma."
+
+msgid ""
+"Only two things are needed: where you are and a phone number. Your request "
+"is sent straight away - it never waits for the AI."
+msgstr ""
+"Hakenewe ibintu bibiri gusa: aho uri na nimero ya telefoni. Ubusabe bwawe "
+"bwoherezwa ako kanya - ntibutegereza AI."
+
+msgid "We could not send your request yet. Please fix this:"
+msgstr "Ntitwabashije kohereza ubusabe bwawe. Kosora ibi:"
+
+msgid "Where are you?"
+msgstr "Uri he?"
+
+msgid "required"
+msgstr "birakenewe"
+
+msgid ""
+"We use your location only to send the nearest ambulance. Only the team "
+"helping you can see it."
+msgstr ""
+"Aho uri dukoresha gusa kohereza imbangukiragutabara iri hafi. Itsinda "
+"rigufasha ni ryo ryonyine rihabona."
+
+msgid "Use my location"
+msgstr "Koresha aho ndi"
+
+msgid "I'll pick it on the map"
+msgstr "Ndahitamo ku ikarita"
+
+msgid "Location not set yet."
+msgstr "Aho uri ntiharashyirwaho."
+
+msgid "Map. Tap where you are, or drag the pin to correct your position."
+msgstr "Ikarita. Kanda aho uri, cyangwa wimure akamenyetso ukosore."
+
+msgid "Your location:"
+msgstr "Aho uri:"
+
+msgid "not set"
+msgstr "ntiharashyirwaho"
+
+msgid "Address or landmark (optional, helps the crew find you)"
+msgstr "Aderesi cyangwa ikimenyetso (si ngombwa, gifasha abakozi kukubona)"
+
+msgid "e.g. near Kimironko market, blue gate"
+msgstr "urugero: hafi y'isoko rya Kimironko, igipangu cy'ubururu"
+
+msgid "How can we reach you?"
+msgstr "Twakuvugisha dute?"
+
+msgid "Phone number"
+msgstr "Nimero ya telefoni"
+
+msgid "Filled in from your profile. Change it if you are using another phone."
+msgstr "Byakuwe mu mwirondoro wawe. Bihindure niba ukoresha indi telefoni."
+
+msgid "What kind of emergency?"
+msgstr "Ni ikihe kibazo cyihutirwa?"
+
+msgid "Choose “Other” if you are not sure."
+msgstr "Hitamo “Ikindi” niba utazi neza."
+
+msgid "Add more details (optional - helps the team prepare)"
+msgstr "Ongeraho ibisobanuro (si ngombwa - bifasha itsinda kwitegura)"
+
+msgid "Who needs help?"
+msgstr "Ni nde ukeneye ubufasha?"
+
+msgid "Full name"
+msgstr "Amazina yombi"
+
+msgid "Change this if you are asking for help for someone else."
+msgstr "Bihindure niba usabira undi muntu ubufasha."
+
+msgid "Age"
+msgstr "Imyaka"
+
+msgid "Gender"
+msgstr "Igitsina"
+
+msgid "What is happening?"
+msgstr "Biri kugenda bite?"
+
+msgid "How is the person right now?"
+msgstr "Umurwayi ameze ate ubu?"
+
+msgid "What happened?"
+msgstr "Byagenze bite?"
+
+msgid "What do you notice? (for example: vomiting, fever, cannot move an arm)"
+msgstr ""
+"Ni iki ubona? (urugero: kuruka, umuriro, kudashobora kunyeganyeza ukuboko)"
+
+msgid "Tick anything that is true"
+msgstr "Hitamo ibivugwa by'ukuri"
+
+msgid "Pain (0 = none, 10 = worst):"
+msgstr "Ububabare (0 = nta bwo, 10 = bukabije):"
+
+msgid "What do you need?"
+msgstr "Ukeneye iki?"
+
+msgid "An ambulance"
+msgstr "Imbangukiragutabara"
+
+msgid "The nearest available ambulance comes to you."
+msgstr "Imbangukiragutabara iri hafi iza aho uri."
+
+msgid "Advice from a health worker"
+msgstr "Inama z'umukozi w'ubuzima"
+
+msgid "A professional reviews your request and advises you."
+msgstr "Umunyamwuga asuzuma ubusabe bwawe akakugira inama."
+
+msgid "Send for help"
+msgstr "Ohereza ubusabe bw'ubufasha"
+
+msgid ""
+"Set your location first (step 1). Medical staff make all decisions; the AI "
+"only helps sort requests."
+msgstr ""
+"Banza ushyireho aho uri (intambwe ya 1). Abakozi b'ubuvuzi ni bo bafata "
+"ibyemezo; AI ifasha gusa gutondeka ubusabe."
+
+msgid "chosen on the map"
+msgstr "byatoranyijwe ku ikarita"
+
+msgid "Location found. You can drag the pin if it is not right."
+msgstr "Aho uri habonetse. Wimura akamenyetso niba atari ho."
+
+msgid "Location chosen on the map."
+msgstr "Aho uri hatoranyijwe ku ikarita."
+
+msgid ""
+"This phone or browser cannot share your location. Please tap where you are "
+"on the map."
+msgstr ""
+"Iyi telefoni cyangwa mushakisha ntishobora gutanga aho uri. Kanda aho uri ku"
+" ikarita."
+
+msgid "Finding your location… If your browser asks, choose Allow."
+msgstr "Turimo gushaka aho uri… Niba mushakisha ibikubajije, hitamo Emera."
+
+msgid "Location sharing was not allowed."
+msgstr "Gutanga aho uri ntibyemewe."
+
+msgid "Your location could not be found."
+msgstr "Aho uri ntihabonetse."
+
+msgid "Finding your location took too long."
+msgstr "Gushaka aho uri byatwaye igihe kirekire."
+
+msgid "Please tap where you are on the map instead."
+msgstr "Ahubwo kanda aho uri ku ikarita."
+
+msgid "Tap the map where you are."
+msgstr "Kanda ku ikarita aho uri."
+
+msgid ""
+"Tell us where you are: press “Use my location” or tap the map (step 1)."
+msgstr ""
+"Tubwire aho uri: kanda “Koresha aho ndi” cyangwa ukande ku ikarita (intambwe"
+" ya 1)."
+
+msgid "Enter a phone number we can call, for example +250 781 234 567."
+msgstr "Andika nimero twahamagara, urugero +250 781 234 567."
+
+msgid "Age must be between 0 and 120."
+msgstr "Imyaka igomba kuba hagati ya 0 na 120."
+
+msgid "Not sent yet. Please fix this:"
+msgstr "Ntibiroherezwa. Kosora ibi:"
+
+msgid "5 measurements"
+msgstr "Ibipimo 5"
+
+msgid "All"
+msgstr "Byose"
+
+msgid "Auto-refresh"
+msgstr "Bihinduka ubwabyo"
+
+msgid "Blood pressure"
+msgstr "Umuvuduko w'amaraso"
+
+msgid "Check"
+msgstr "Reba"
+
+msgid "Choose a test. Results appear here automatically."
+msgstr "Hitamo igipimo. Ibisubizo biza hano ubwabyo."
+
+msgid "Demonstration value, not a real measurement"
+msgstr "Umubare w'igerageza, si igipimo nyakuri"
+
+msgid "Details"
+msgstr "Ibisobanuro"
+
+msgid "Emergency active"
+msgstr "Ubutabazi burakomeje"
+
+msgid "Emergency help"
+msgstr "Ubutabazi bwihuse"
+
+msgid "Feeling very unwell? Use"
+msgstr "Urumva urembye cyane? Koresha"
+
+msgid "Health information you opened before is still available:"
+msgstr "Amakuru ku buzima wafunguye mbere aracyaboneka:"
+
+msgid "History"
+msgstr "Amateka"
+
+msgid "Live"
+msgstr "Ako kanya"
+
+msgid "Main actions"
+msgstr "Ibikorwa by'ingenzi"
+
+msgid "Measure"
+msgstr "Pima"
+
+msgid "My tests"
+msgstr "Ibipimo byanjye"
+
+msgid "My vital signs"
+msgstr "Ibimenyetso by'ubuzima bwanjye"
+
+msgid "Normal"
+msgstr "Bisanzwe"
+
+msgid "Nothing in progress."
+msgstr "Nta kirimo gukorwa."
+
+msgid "Recent trend"
+msgstr "Uko byagenze vuba"
+
+msgid "Request all"
+msgstr "Saba byose"
+
+msgid "Request test"
+msgstr "Saba igipimo"
+
+msgid "Requests cannot be sent without internet. In an emergency, call:"
+msgstr "Ubusabe ntibwoherezwa nta interineti. Mu byihutirwa, hamagara:"
+
+msgid "Send an ambulance to me"
+msgstr "Nyoherereza imbangukiragutabara"
+
+msgid "Temperature"
+msgstr "Ubushyuhe"
+
+msgid "Test in progress"
+msgstr "Igipimo kirakorwa"
+
+msgid "Track"
+msgstr "Kurikirana"
+
+msgid "Try again"
+msgstr "Ongera ugerageze"
+
+msgid "What is this?"
+msgstr "Ibi ni iki?"
+
+msgid "You are offline"
+msgstr "Nta interineti ufite"
+
+msgid "beats/min"
+msgstr "inshuro/umunota"
+
+msgid "breaths/min"
+msgstr "guhumeka/umunota"
+
+msgid "English"
+msgstr "Icyongereza"
+
+msgid "Kinyarwanda"
+msgstr "Ikinyarwanda"
+
+msgid "French"
+msgstr "Igifaransa"
+
+msgid "%(n)s in progress"
+msgid_plural "%(n)s in progress"
+msgstr[0] "%(n)s birakorwa"
+msgstr[1] "%(n)s birakorwa"
+
+msgid "%(n)s test in progress"
+msgid_plural "%(n)s tests in progress"
+msgstr[0] "Igipimo %(n)s kirakorwa"
+msgstr[1] "Ibipimo %(n)s birakorwa"
+
+msgid "%(n)s request so far"
+msgid_plural "%(n)s requests so far"
+msgstr[0] "Ubusabe %(n)s kugeza ubu"
+msgstr[1] "Ubusabe %(n)s kugeza ubu"

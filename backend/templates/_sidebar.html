@@ -1,0 +1,51 @@
+{% load i18n %}
+{% with n=request.resolver_match.url_name r=user.role %}
+<aside class="sidebar" id="sidebar">
+  <a class="brand" href="{% url 'home' %}"><span class="brand-mark" aria-hidden="true"><i class="bi bi-heart-pulse-fill"></i></span> Smart Medical<br>Emergency</a>
+  <nav class="nav flex-column" aria-label="{% translate 'Main menu' %}">
+  {% if r == 'patient' %}
+    {% url 'request_emergency' as u %}{% translate "Get emergency help" as t %}{% include "_navlink.html" with href=u icon="bi-exclamation-octagon-fill" label=t names="|request_emergency|" current=n cls="sos" %}
+    {% url 'patient_home' as u %}{% translate "My dashboard" as t %}{% include "_navlink.html" with href=u icon="bi-house-door" label=t names="|patient_home|" current=n %}
+    {% url 'notifications' as u %}{% translate "Messages" as t %}{% include "_navlink.html" with href=u icon="bi-chat-left-text" label=t names="|notifications|" current=n badge=unread_count %}
+  {% elif r == 'paramedic' %}
+    {% url 'paramedic_home' as u %}{% translate "My ambulance" as t %}{% include "_navlink.html" with href=u icon="bi-truck-front" label=t names="|paramedic_home|" current=n %}
+    {% url 'hospitals' as u %}{% translate "Hospitals" as t %}{% include "_navlink.html" with href=u icon="bi-hospital" label=t names="|hospitals|" current=n %}
+  {% else %}
+    {% url 'dashboard' as u %}{% translate "Dashboard" as t %}{% include "_navlink.html" with href=u icon="bi-grid-1x2" label=t names="|dashboard|" current=n %}
+    {% url 'emergencies' as u %}{% translate "Emergency requests" as t %}{% include "_navlink.html" with href=u icon="bi-exclamation-triangle" label=t names="|emergencies|emergency_detail|" current=n %}
+    {% if r != 'hospital' or user.is_superuser %}
+    {% url 'test_requests' as u %}{% translate "Patient test requests" as t %}{% include "_navlink.html" with href=u icon="bi-clipboard2-pulse" label=t names="|test_requests|test_request_detail|sim_panel|" current=n badge=pending_tests badge_attr="data-pending-count" %}
+    {% endif %}
+    {% url 'vitals_board' as u %}{% translate "Vital signs" as t %}{% include "_navlink.html" with href=u icon="bi-activity" label=t names="|vitals_board|vitals_detail|" current=n %}
+    {% url 'vitals_alerts' as u %}{% translate "Vital-sign alerts" as t %}{% include "_navlink.html" with href=u icon="bi-bell-fill" label=t names="|vitals_alerts|" current=n %}
+    {% if r != 'hospital' or user.is_superuser %}
+    {% url 'patient_list' as u %}{% translate "Patients" as t %}{% include "_navlink.html" with href=u icon="bi-people" label=t names="|patient_list|patient_detail|" current=n %}
+    {% url 'ambulances' as u %}{% translate "Ambulances" as t %}{% include "_navlink.html" with href=u icon="bi-truck-front" label=t names="|ambulances|ambulance_new|ambulance_edit|" current=n %}
+    {% url 'simulator' as u %}{% translate "IoT simulator (demo)" as t %}{% include "_navlink.html" with href=u icon="bi-cpu" label=t names="|simulator|" current=n %}
+    {% endif %}
+    {% url 'hospital_list' as u %}{% translate "Hospitals" as t %}{% include "_navlink.html" with href=u icon="bi-hospital" label=t names="|hospital_list|hospital_detail|hospital_edit|hospital_new|" current=n %}
+    {% if user.hospital_id %}{% url 'hospital_capacity' as u %}{% translate "Bed capacity" as t %}{% include "_navlink.html" with href=u icon="bi-clipboard2-data" label=t names="|hospital_capacity|" current=n %}{% endif %}
+  {% endif %}
+  {% if r != 'patient' %}{# patients reach these from the service cards on their dashboard #}
+    <div class="nav-section" role="presentation">{% translate "Health information" %}</div>
+    {% url 'disease_list' as u %}{% translate "Diseases and conditions" as t %}{% include "_navlink.html" with href=u icon="bi-journal-medical" label=t names="|disease_list|disease_detail|" current=n %}
+    {% url 'assistant' as u %}{% translate "Ask a health question" as t %}{% include "_navlink.html" with href=u icon="bi-chat-square-heart" label=t names="|assistant|" current=n %}
+  {% if r != 'patient' and r != 'paramedic' %}
+    <div class="nav-section" role="presentation">{% translate "Management" %}</div>
+    {% url 'reports' as u %}{% translate "Reports" as t %}{% include "_navlink.html" with href=u icon="bi-bar-chart-line" label=t names="|reports|" current=n %}
+    {% if r != 'hospital' or user.is_superuser %}
+    {% url 'activity_log' as u %}{% translate "Activity log" as t %}{% include "_navlink.html" with href=u icon="bi-clock-history" label=t names="|activity_log|" current=n %}
+    {% url 'approvals' as u %}{% translate "Approve staff accounts" as t %}{% include "_navlink.html" with href=u icon="bi-person-check" label=t names="|approvals|" current=n %}
+    {% endif %}
+    {% if user.is_admin_role %}{% url 'user_list' as u %}{% translate "Users" as t %}{% include "_navlink.html" with href=u icon="bi-person-gear" label=t names="|user_list|" current=n %}{% endif %}
+    {% if user.is_superuser %}<a class="nav-link" href="/admin/"><i class="bi bi-database-gear" aria-hidden="true"></i> {% translate "System settings (database)" %}</a>{% endif %}
+  {% endif %}
+    <div class="nav-section" role="presentation">{% translate "My account" %}</div>
+    {% url 'notifications' as u %}{% translate "Messages" as t %}{% include "_navlink.html" with href=u icon="bi-bell" label=t names="|notifications|" current=n badge=unread_count %}
+    {% url 'profile' as u %}{% translate "My profile and settings" as t %}{% include "_navlink.html" with href=u icon="bi-person-gear" label=t names="|profile|password_change|" current=n %}
+  {% endif %}
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="nav-link w-100 border-0 bg-transparent text-start"><i class="bi bi-box-arrow-left" aria-hidden="true"></i> {% translate "Log out" %}</button></form>
+  </nav>
+  <div class="user-box"><div class="name"><i class="bi bi-person-circle" aria-hidden="true"></i> {{ user.get_full_name|default:user.username }}</div><div>{{ user.get_role_display }}{% if r == 'hospital' and user.hospital %} · {{ user.hospital.name }}{% endif %}</div></div>
+</aside>
+{% endwith %}

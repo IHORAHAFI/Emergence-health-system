@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Vital signs - {{ em.reference }}{% endblock %}
+{% block page_title %}Vital signs - {{ em.reference }}{% endblock %}
+{% block content %}
+<a href="{% if user.role == 'patient' %}{% url 'track' em.reference %}{% else %}{% url 'paramedic_home' %}{% endif %}">&larr; Back</a>
+<h2 class="h3 mt-2">Send vital signs <small class="text-muted">{{ em.reference }}</small></h2>
+<p class="small text-muted">Measurements are sent to the medical team handling this emergency so they can prepare before arrival. They do not change your ambulance request. If you feel worse, do not wait - call for help.</p>
+
+{% if not consent %}
+<div class="card p-3 mb-3 border-start border-4 border-warning">
+  <h2 class="h5">Consent</h2><p class="small">{{ consent_text }}</p>
+  <form method="post" action="{% url 'vitals_consent' em.reference %}">{% csrf_token %}<button class="btn btn-danger">I agree - share my measurements</button></form>
+</div>
+{% else %}
+<div class="row g-3 mb-3">
+  {% for k, label in vital_cards %}
+  <div class="col-6 col-md-4 col-xl-2"><div class="card p-3 h-100" id="card-{{ k }}">
+    <div class="small text-muted">{{ label }}</div>
+    <div class="fs-3 fw-bold" data-v>-</div>
+    <div class="small" data-src>no measurement yet</div>
+    <span class="status-pill secondary mt-1" data-flag>-</span>
+  </div></div>
+  {% endfor %}
+</div>
+<div class="card mb-3"><div class="card-header d-flex justify-content-between"><span>Measurements over time</span><span class="small text-muted">solid = real device / manual · dashed = SIMULATED</span></div>
+  <div class="card-body" style="height:240px"><canvas id="trend"></canvas></div></div>
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3 mb-3"><h2 class="h5"><i class="bi bi-bluetooth"></i> Real Bluetooth devices</h2>
+      <div id="ble-check" class="small mb-2 text-muted">Checking Bluetooth support…</div>
+      <p class="small text-muted mb-2">Works with devices that use the <b>standard</b> Bluetooth health profiles (Chrome / Edge). Readings are sent automatically each time the device measures and are labelled <b>BLUETOOTH</b>.</p>
+      <table class="table table-sm align-middle mb-2"><tbody>
+        {% for kind, icon, label in ble_kinds %}
+        <tr id="row-{{ kind }}"><td><i class="bi {{ icon }}"></i> {{ label }}</td>
+          <td><span class="status-pill secondary" data-state>Not connected</span> <small class="text-muted" data-info></small></td>
+          <td class="text-end text-nowrap"><button class="btn btn-sm btn-outline-primary ble" data-kind="{{ kind }}">Connect</button>
+            <button class="btn btn-sm btn-light d-none ble-off" data-kind="{{ kind }}">Disconnect</button></td></tr>
+        {% endfor %}
+      </tbody></table>
+      <div class="form-check small"><input class="form-check-input" type="checkbox" id="ble-all"><label class="form-check-label" for="ble-all">Show <b>all</b> nearby Bluetooth devices (use this if your device does not appear in the list)</label></div>
+      <ul class="small mt-2 mb-0 list-unstyled" id="ble-status"></ul>
+    </div>
+    <div class="card p-3 mb-3"><h2 class="h5"><i class="bi bi-keyboard"></i> Enter manually</h2>
+      <form id="manual" class="row g-2">
+        <div class="col-6"><label class="form-label small mb-0">Temperature (°C)</label><input class="form-control" name="temperature_c" type="number" step="0.1" min="25" max="45"></div>
+        <div class="col-6"><label class="form-label small mb-0">Heart rate (bpm)</label><input class="form-control" name="heart_rate_bpm" type="number" min="20" max="250"></div>
+        <div class="col-6"><label class="form-label small mb-0">SpO₂ (%)</label><input class="form-control" name="spo2_pct" type="number" min="50" max="100"></div>
+        <div class="col-6"><label class="form-label small mb-0">Breaths per minute</label><input class="form-control" name="respiratory_rate" type="number" min="4" max="60"></div>
+        <div class="col-6"><label class="form-label small mb-0">Systolic (mmHg)</label><input class="form-control" name="systolic_mmhg" type="number" min="50" max="260"></div>
+        <div class="col-6"><label class="form-label small mb-0">Diastolic (mmHg)</label><input class="form-control" name="diastolic_mmhg" type="number" min="30" max="160"></div>
+        <div class="col-6"><label class="form-label small mb-0">Alertness</label><select class="form-select" name="consciousness"><option value="">-</option>{% for v,l in consciousness %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></div>
+        <div class="col-6"><label class="form-label small mb-0">ECG result (from ECG device screen)</label><input class="form-control" name="ecg_rhythm" maxlength="100" placeholder="e.g. Sinus rhythm"></div>
+        <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="on_supplemental_oxygen" id="o2"><label for="o2" class="form-check-label small">Using supplemental oxygen</label></div></div>
+        <div class="col-12"><button class="btn btn-danger">Send measurements</button></div>
+      </form>
+    </div>
+    <div class="card p-3 border-start border-4 border-secondary"><h2 class="h5"><i class="bi bi-cpu"></i> Virtual IoT simulation mode (demo / testing)</h2>
+      {% if user.role != 'patient' and user.role != 'paramedic' %}<p class="small mb-2">For a full virtual patient with five continuously transmitting devices, use the <a href="{% url 'simulator' %}">IoT simulator</a>.</p>{% endif %}
+      <p class="small text-muted mb-2">Generates SIMULATED values - stored and shown as simulated, never as real measurements.</p>
+      <div class="d-flex flex-wrap gap-2">
+        <select id="sim-scenario" class="form-select form-select-sm w-auto"><option value="normal">Normal</option><option value="fever">Fever</option><option value="hypoxia">Low oxygen</option><option value="shock">Low blood pressure</option></select>
+        <select id="sim-device" class="form-select form-select-sm w-auto"><option value="all">All devices</option><option value="thermometer">Thermometer</option><option value="pulse_oximeter">Pulse oximeter</option><option value="blood_pressure">BP monitor</option></select>
+        <button class="btn btn-sm btn-secondary" id="sim">Send simulated reading</button>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div id="result"></div>
+    <div class="card"><div class="card-header">Sent readings</div><ul class="list-group list-group-flush" id="sent">
+      {% for r in readings %}<li class="list-group-item small">{{ r.measured_at|date:"H:i:s" }} · {{ r.get_source_display }}{% if r.temperature_c %} · {{ r.temperature_c }}°C{% endif %}{% if r.heart_rate_bpm %} · HR {{ r.heart_rate_bpm }}{% endif %}{% if r.spo2_pct %} · SpO₂ {{ r.spo2_pct }}%{% endif %}{% if r.systolic_mmhg %} · BP {{ r.systolic_mmhg }}/{{ r.diastolic_mmhg }}{% endif %}</li>
+      {% empty %}<li class="list-group-item small text-muted" id="none">Nothing sent yet.</li>{% endfor %}</ul></div>
+    {% if user.role == 'patient' %}<form method="post" action="{% url 'vitals_consent' em.reference %}" class="mt-2">{% csrf_token %}<input type="hidden" name="decision" value="revoke"><button class="btn btn-link btn-sm text-muted p-0">Stop sharing measurements</button></form>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}{% if consent %}
+{{ readings_json|json_script:"readings-data" }}
+<script src="{% static 'js/ble-health.js' %}"></script>
+<script>
+// ---- live cards + chart (sources always shown; simulated points are dashed) ----
+const VIT = {temperature_c: ['°C', 'Temperature'], heart_rate_bpm: ['bpm', 'Heart rate'], spo2_pct: ['%', 'Oxygen saturation (SpO2)'],
+  systolic_mmhg: ['mmHg', 'Systolic blood pressure'], diastolic_mmhg: ['mmHg', 'Diastolic blood pressure'], respiratory_rate: ['/min', 'Respiratory rate']};
+let READINGS = JSON.parse(document.getElementById('readings-data').textContent);
+const SERIES = [['heart_rate_bpm', '#c62828'], ['spo2_pct', '#1d6fd8'], ['respiratory_rate', '#18794e'], ['systolic_mmhg', '#0b2545'], ['diastolic_mmhg', '#7c3aed'], ['temperature_c', '#e8590c']];
+const trend = new Chart(document.getElementById('trend'), {type: 'line', data: {labels: [], datasets: SERIES.map(([k, c]) => ({label: VIT[k][1].replace(/ \(.*\)/, ''), data: [], borderColor: c, backgroundColor: c, borderWidth: 2, pointRadius: 2, spanGaps: true,
+  segment: {borderDash: ctx => READINGS_SORTED[ctx.p1DataIndex]?.simulated ? [5, 4] : undefined}}))},
+  options: {animation: false, responsive: true, maintainAspectRatio: false, plugins: {legend: {position: 'bottom', labels: {boxWidth: 10, font: {size: 11}}}}}});
+let READINGS_SORTED = [];
+function renderVitals() {
+  READINGS_SORTED = [...READINGS].sort((a, b) => a.measured_at.localeCompare(b.measured_at)).slice(-40);
+  trend.data.labels = READINGS_SORTED.map(r => new Date(r.measured_at).toLocaleTimeString());
+  trend.data.datasets.forEach((ds, i) => ds.data = READINGS_SORTED.map(r => r[SERIES[i][0]]));
+  trend.update();
+  for (const [k, [unit, pname]] of Object.entries(VIT)) {
+    const r = [...READINGS_SORTED].reverse().find(x => x[k] != null), c = document.getElementById('card-' + k);
+    if (!r || !c) continue;
+    const lim = (r.threshold_flags || {})[k], news = (r.alerts || []).find(a => a.parameter === pname && a.severity !== 'yellow');
+    const abn = news || (lim ? {severity: 'amber'} : null);
+    c.querySelector('[data-v]').innerHTML = `${E(r[k])}<small class="fs-6 text-muted"> ${unit}</small>`;
+    c.querySelector('[data-src]').innerHTML = `${E(r.device || r.source_display)} · ${new Date(r.measured_at).toLocaleTimeString()} ${r.simulated ? '<span class="badge badge-sim">SIMULATED</span>' : `<span class="badge bg-primary">${E(r.source.toUpperCase())}</span>`}`;
+    const f = c.querySelector('[data-flag]');
+    f.className = 'status-pill mt-1 ' + (abn ? (abn.severity === 'red' ? 'danger' : 'warning') : 'success');
+    f.textContent = abn ? `Outside usual range${lim ? ' (' + lim + ')' : ''}` : 'Usual range';
+  }
+}
+</script>
+<script>
+const API = "{% url 'api_vitals' em.reference %}", SIM = "{% url 'api_vitals_simulate' em.reference %}", E = App.esc;
+async function post(url, body) {
+  const r = await fetch(url, {method: 'POST', credentials: 'same-origin', body: JSON.stringify(body),
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': App.csrf()}});
+  const d = await r.json().catch(() => ({detail: 'Server error'}));
+  show(r.ok, d);
+  return r.ok;
+}
+function show(ok, d) {
+  const box = document.getElementById('result');
+  if (!ok) { box.innerHTML = `<div class="alert alert-warning">${E(d.detail || JSON.stringify(d))}</div>`; return; }
+  const alerts = (d.alerts || []).filter(a => a.severity !== 'info');
+  box.innerHTML = `<div class="alert ${alerts.length ? 'alert-warning' : 'alert-success'}">Sent at ${new Date(d.received_at).toLocaleTimeString()}${d.simulated ? ' (SIMULATED)' : ''}. The medical team can see it now.
+    ${alerts.length ? '<br><b>Some values are outside the usual range - the team has been alerted.</b> If you feel worse, call for help.' : ''}</div>`;
+  document.getElementById('none')?.remove();
+  READINGS.push(d); renderVitals();
+  const v = [d.temperature_c != null && `${d.temperature_c}°C`, d.heart_rate_bpm && `HR ${d.heart_rate_bpm}`, d.spo2_pct && `SpO₂ ${d.spo2_pct}%`,
+             d.systolic_mmhg && `BP ${d.systolic_mmhg}/${d.diastolic_mmhg}`].filter(Boolean).join(' · ');
+  document.getElementById('sent').insertAdjacentHTML('afterbegin', `<li class="list-group-item small">${new Date(d.measured_at).toLocaleTimeString()} · ${E(d.source_display)} · ${E(v)}</li>`);
+}
+renderVitals();
+document.getElementById('manual').onsubmit = async e => {
+  e.preventDefault();
+  const body = {source: 'manual'};
+  for (const [k, v] of new FormData(e.target)) if (v !== '') body[k] = k === 'on_supplemental_oxygen' ? true : v;
+  if (await post(API, body)) e.target.reset();
+};
+document.getElementById('sim').onclick = () => post(SIM, {scenario: document.getElementById('sim-scenario').value, device: document.getElementById('sim-device').value});
+const status = (msg, cls) => document.getElementById('ble-status').insertAdjacentHTML('afterbegin', `<li class="${cls || ''}">${new Date().toLocaleTimeString()} ${E(msg)}</li>`);
+const handles = {};
+function setRow(kind, label, cls, info) {
+  const row = document.getElementById('row-' + kind);
+  const pill = row.querySelector('[data-state]');
+  pill.className = 'status-pill ' + cls; pill.textContent = label;
+  if (info !== undefined) row.querySelector('[data-info]').textContent = info;
+  const on = cls === 'success' || cls === 'warning'; // connected, connecting or reconnecting
+  row.querySelector('.ble').classList.toggle('d-none', on);
+  row.querySelector('.ble-off').classList.toggle('d-none', !on);
+}
+BleHealth.check().then(c => {
+  const box = document.getElementById('ble-check');
+  box.className = 'small mb-2 ' + (c.ok ? 'text-success' : 'alert alert-warning py-2');
+  box.innerHTML = c.ok ? (c.uncertain ? '<i class="bi bi-question-circle"></i> Web Bluetooth is supported; the adapter did not report its status - press Connect to try.' : '<i class="bi bi-check-circle"></i> Web Bluetooth is available in this browser.') : '<i class="bi bi-exclamation-triangle"></i> ' + E(c.message);
+  if (!c.ok) document.querySelectorAll('.ble').forEach(b => b.disabled = true);
+});
+document.querySelectorAll('.ble-off').forEach(btn => btn.onclick = () => handles[btn.dataset.kind]?.disconnect());
+document.querySelectorAll('.ble').forEach(btn => btn.onclick = async () => {
+  const kind = btn.dataset.kind;
+  try {
+    handles[kind] = await BleHealth.connect(kind, {
+      acceptAll: document.getElementById('ble-all').checked,
+      onReading(values, dev) {
+        const clean = Object.fromEntries(Object.entries(values).filter(([, v]) => v != null && !Number.isNaN(v)));
+        if (!Object.keys(clean).length) return status(`${dev.name || kind}: reading had no valid value - re-measure`, 'text-warning');
+        status(`${dev.name || kind}: ${JSON.stringify(clean)}`, 'text-success');
+        setRow(kind, 'Connected', 'success', `last reading ${new Date().toLocaleTimeString()}`);
+        post(API, {source: 'bluetooth', measured_at: new Date().toISOString(), ...clean,
+                   device: {device_identifier: dev.id, name: dev.name || kind, kind}});
+      },
+      onStatus(state, dev, d) {
+        const n = dev.name || kind;
+        if (state === 'connecting') setRow(kind, 'Connecting…', 'warning', n);
+        else if (state === 'connected') { setRow(kind, 'Connected', 'success', `${n}${d && d.battery != null ? ` · battery ${d.battery}%` : ''}`); status(`${n} connected - take a measurement on the device now.`, 'text-success'); }
+        else if (state === 'reconnecting') { setRow(kind, `Reconnecting (${d.attempt}/3)…`, 'warning'); status(`${n} lost the connection - reconnecting in ${d.wait / 1000} s…`, 'text-warning'); }
+        else if (state === 'disconnected') { setRow(kind, 'Disconnected', 'danger'); status(`${n} disconnected and could not reconnect. Move it closer, switch it on, then press Connect - or enter values manually.`, 'text-danger'); }
+        else if (state === 'closed') { setRow(kind, 'Not connected', 'secondary', ''); status(`${n} disconnected.`); }
+        else if (state === 'bad-data') status(`${n} sent data that could not be read (${d}).`, 'text-danger');
+      },
+    });
+  } catch (err) {
+    setRow(kind, 'Not connected', 'secondary', '');
+    status(err.name === 'NotFoundError' ? 'No device was selected (or none was found - see the tips above the list).' : err.message, 'text-danger');
+  }
+});
+</script>
+{% endif %}{% endblock %}
