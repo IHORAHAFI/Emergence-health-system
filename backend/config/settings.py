@@ -176,3 +176,6 @@ LANGUAGES = [("en", _("English")), ("rw", _("Kinyarwanda")), ("fr", _("French"))
 LANGUAGE_CODE = "en"
 USE_I18N = True
 LOCALE_PATHS = [BASE_DIR / "locale"]
+
+# AI assistant: stored conversations are deleted after this many days (python manage.py purge_assistant_history)
+ASSISTANT_HISTORY_DAYS = int(os.getenv("ASSISTANT_HISTORY_DAYS", "30"))

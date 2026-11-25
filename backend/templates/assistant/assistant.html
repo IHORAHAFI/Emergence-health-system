@@ -2,22 +2,54 @@
 {% block title %}AI medical assistant{% endblock %}
 {% block page_title %}AI medical assistant{% endblock %}
 {% block content %}
+<style>
+  .chat-box{min-height:320px;max-height:62vh;overflow-y:auto;display:flex;flex-direction:column;gap:.6rem;padding:.25rem}
+  .msg{max-width:88%;padding:.7rem .9rem;border-radius:1rem;line-height:1.45;word-wrap:break-word}
+  .msg.user{align-self:flex-end;background:var(--bs-primary);color:#fff;border-bottom-right-radius:.3rem}
+  .msg.bot{align-self:flex-start;background:var(--bs-light-bg-subtle,#f4f6f8);border:1px solid var(--bs-border-color);border-bottom-left-radius:.3rem}
+  .msg.bot ul{margin:.3rem 0 .3rem 1.1rem;padding:0}
+  .msg .src{font-size:.8rem;margin-top:.5rem;border-top:1px dashed var(--bs-border-color);padding-top:.4rem}
+  .msg .src li{margin-bottom:.15rem}
+  .hist-item{cursor:pointer}
+  @media (max-width:576px){.msg{max-width:96%}}
+</style>
 <div class="row g-3 justify-content-center">
   <div class="col-lg-8">
     <div class="card">
-      <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-chat-square-heart text-primary fs-5"></i> <span>Health information assistant</span><span class="badge bg-light text-primary border ms-auto">Trusted sources only</span></div>
+      <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+        <i class="bi bi-chat-square-heart text-primary fs-5"></i><span>Health information assistant</span>
+        <span class="badge bg-light text-primary border">Trusted sources only</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="clear" title="Start a new conversation">
+          <i class="bi bi-plus-square"></i> New / clear</button>
+      </div>
       <div class="card-body">
         <div class="chat-box mb-3" id="chat" aria-live="polite">
-          <div class="msg bot">Hello. Describe your symptoms or ask a health or first-aid question. I give general information from WHO, NHS, IFRC and AHA guidance, with the sources - <b>I cannot diagnose you or prescribe treatment</b>.</div>
+          <div class="msg bot">Hello. Ask a health question in your own words - about a symptom, a disease, a medical word, a test, a medicine or first aid. I answer from trusted sources (WHO, RBC, NIH/MedlinePlus, CDC, NHS) and show them. <b>I cannot diagnose you, prescribe, or give a personal dose.</b></div>
         </div>
         <form id="ask" class="d-flex gap-2">{% csrf_token %}
           <label for="q" class="visually-hidden">Your question</label>
-          <input id="q" class="form-control" maxlength="500" placeholder="e.g. What are the signs of a stroke?" required autocomplete="off">
+          <input id="q" class="form-control form-control-lg" maxlength="500" placeholder="e.g. What is malaria?" required autocomplete="off">
           <button class="btn btn-primary px-3" id="send"><i class="bi bi-send"></i><span class="d-none d-sm-inline"> Send</span></button>
         </form>
-        <div class="d-flex flex-wrap gap-2 mt-2">
+        <div class="d-flex flex-wrap gap-2 mt-2" id="suggestions">
           {% for s in suggestions %}<button type="button" class="btn btn-sm btn-light border suggestion">{{ s }}</button>{% endfor %}
         </div>
+        {% if user.is_authenticated %}
+        <div class="d-flex flex-wrap gap-3 mt-3 small">
+          {% if user.role == 'patient' %}
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="vitals">
+            <label class="form-check-label" for="vitals">Use my latest vital signs to explain my readings</label></div>
+          {% endif %}
+          <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="save" checked>
+            <label class="form-check-label" for="save">Save my conversations ({{ history_days }} days)</label></div>
+        </div>
+        {% if is_staff_user %}
+        <div class="input-group input-group-sm mt-2" style="max-width:420px">
+          <span class="input-group-text">Emergency ref</span>
+          <input id="emref" class="form-control" placeholder="EMG-... (only patients you are authorised to see)">
+        </div>
+        {% endif %}
+        {% endif %}
       </div>
     </div>
   </div>
@@ -28,7 +60,15 @@
       {% if user.role == 'patient' %}<a class="btn btn-danger btn-sm w-100 mb-2" href="{% url 'request_emergency' %}"><i class="bi bi-exclamation-octagon"></i> Request emergency help</a>{% endif %}
       <p class="small mb-0">Or call <b>{{ hotline }}</b> immediately.</p>
     </div>
-    <div class="card p-3 mb-3"><h2 class="h6"><i class="bi bi-info-circle text-primary"></i> Medical disclaimer</h2><p class="small mb-0">{{ disclaimer }} Answers come only from a small curated knowledge base of public guidance; the sources are shown with every answer. Always follow advice from a qualified health worker.</p></div>
+    {% if user.is_authenticated %}
+    <div class="card p-3 mb-3">
+      <div class="d-flex align-items-center mb-2"><h2 class="h6 mb-0"><i class="bi bi-clock-history text-primary"></i> My conversations</h2>
+        <button class="btn btn-link btn-sm text-danger ms-auto p-0" id="delall">Delete all</button></div>
+      <div id="hist" class="list-group list-group-flush small"><div class="text-muted">Loading…</div></div>
+      <p class="small text-muted mt-2 mb-0">Only you can see these. They are deleted automatically after {{ history_days }} days.</p>
+    </div>
+    {% endif %}
+    <div class="card p-3 mb-3"><h2 class="h6"><i class="bi bi-info-circle text-primary"></i> Medical disclaimer</h2><p class="small mb-0">{{ disclaimer }} Every answer lists its sources. Sources marked "pending review" have not yet been checked by a clinician here.</p></div>
     <div class="card p-3"><h2 class="h6"><i class="bi bi-journal-medical text-primary"></i> Medical information</h2><p class="small mb-2">Browse diseases and conditions by category.</p><a class="btn btn-outline-primary btn-sm" href="{% url 'disease_list' %}">Open library</a></div>
   </div>
 </div>
@@ -36,28 +76,103 @@
 {% block scripts %}
 <script>
 const chat = document.getElementById('chat'), qEl = document.getElementById('q'), E = App.esc;
+const AUTH = {{ user.is_authenticated|yesno:"true,false" }};
+let conversationId = null, localHistory = [];
+const greeting = chat.innerHTML;
+
 function add(cls, html) { const d = document.createElement('div'); d.className = 'msg ' + cls; d.innerHTML = html; chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d; }
+
+// minimal, safe formatting: escape first, then **bold**, bullet lines and [n] citation markers
+function fmt(text) {
+  const lines = E(text).split('\n'); let html = '', inList = false;
+  for (let l of lines) {
+    l = l.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\[(\d+)\]/g, '<sup class="text-primary">[$1]</sup>');
+    if (/^\s*[-•*] /.test(l)) { if (!inList) { html += '<ul>'; inList = true; } html += '<li>' + l.replace(/^\s*[-•*] /, '') + '</li>'; continue; }
+    if (inList) { html += '</ul>'; inList = false; }
+    if (/^#{1,4} /.test(l)) l = '<b>' + l.replace(/^#{1,4} /, '') + '</b>';
+    html += l.trim() ? '<div>' + l + '</div>' : '<div class="mb-1"></div>';
+  }
+  return html + (inList ? '</ul>' : '');
+}
+
+function render(d) {
+  let html = '';
+  if (d.emergency) html += `<div class="alert alert-danger py-2 small mb-2"><b>This may be an emergency.</b> Do not wait for information - get help now.
+    {% if user.role == 'patient' %}<a class="alert-link" href="{% url 'request_emergency' %}">Request emergency help</a>{% elif not user.is_authenticated %}<a class="alert-link" href="{% url 'login' %}">Log in to request help</a>{% endif %} or call {{ hotline }}.</div>`;
+  if (!d.ok) return html + E(d.error || 'No answer.');
+  html += fmt(d.answer);
+  if (d.used_vitals) html += '<div class="small text-muted mt-1"><i class="bi bi-activity"></i> Your latest recorded vital signs were used for this explanation.</div>';
+  if (d.sources && d.sources.length) html += '<div class="src"><b>Sources</b><ol class="mb-0 ps-3">' + d.sources.map(s =>
+      `<li${s.n ? ` value="${s.n}"` : ''}><a href="${E(s.url)}" target="_blank" rel="noopener">${E(s.source)}</a> - ${E(s.title)}`
+      + (s.published ? ` <span class="text-muted">(${E(s.published)})</span>` : '')
+      + (s.reviewed ? ' <span class="badge bg-success-subtle text-success border">clinically reviewed</span>' : ' <span class="badge bg-warning-subtle text-dark border">pending review</span>') + '</li>').join('') + '</ol></div>';
+  if (d.library && d.library.length) html += '<div class="src"><b>Read more:</b> ' + d.library.map(l => `<a href="${E(l.url)}">${E(l.name)}</a>`).join(' · ') + '</div>';
+  if (d.follow_up && d.follow_up.length) html += '<div class="d-flex flex-wrap gap-1 mt-2">' + d.follow_up.map(f => `<span class="badge rounded-pill text-bg-light border">${E(f)}</span>`).join('') + '</div>';
+  html += `<div class="small text-muted mt-1">${E(d.disclaimer || '')}${d.mode === 'llm_grounded' ? ' · AI-written from the sources above' : d.mode === 'extractive' ? ' · quoted from the sources above' : ''}</div>`;
+  return html;
+}
+
+async function api(url, opts = {}) {
+  const r = await fetch(url, {credentials: 'same-origin', ...opts,
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': App.csrf(), ...(opts.headers || {})}});
+  return r.json();
+}
+
 async function ask(q) {
   add('user', E(q));
   const wait = add('bot', '<span class="text-muted"><span class="spinner-border spinner-border-sm"></span> Searching trusted sources…</span>');
+  const save = document.getElementById('save'), vit = document.getElementById('vitals'), emref = document.getElementById('emref');
   try {
-    const r = await fetch("{% url 'assistant_ask' %}", {method: 'POST', credentials: 'same-origin',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': App.csrf()}, body: JSON.stringify({question: q})});
-    const d = await r.json();
-    let html = '';
-    if (d.emergency) html += `<div class="alert alert-danger py-2 small mb-2"><b>This may be an emergency.</b> Do not wait for information - get help now.
-      {% if user.role == 'patient' %}<a class="alert-link" href="{% url 'request_emergency' %}">Request emergency help</a>{% elif not user.is_authenticated %}<a class="alert-link" href="{% url 'login' %}">Log in to request help</a>{% endif %} or call {{ hotline }}.</div>`;
-    if (!d.ok) { wait.innerHTML = html + E(d.error); return; }
-    html += `<div>${E(d.answer)}</div>`;
-    if (d.sources && d.sources.length) html += '<div class="src"><b>Sources:</b> ' + d.sources.map(s => `<a href="${E(s.url)}" target="_blank" rel="noopener">${E(s.source)} - ${E(s.title)}</a>`).join('; ') + '</div>';
-    if (d.library && d.library.length) html += '<div class="src"><b>Read more:</b> ' + d.library.map(l => `<a href="${E(l.url)}">${E(l.name)}</a>${l.reviewed ? '' : ' <span class="badge bg-warning text-dark">pending review</span>'}`).join(' · ') + '</div>';
-    html += `<div class="small text-muted mt-1">${E(d.disclaimer)}</div>`;
-    wait.innerHTML = html;
+    const d = await api("{% url 'assistant_ask' %}", {method: 'POST', body: JSON.stringify({
+      question: q, conversation_id: conversationId, save_history: save ? save.checked : false,
+      include_vitals: vit ? vit.checked : false, emergency_ref: emref ? emref.value.trim() : '', history: localHistory})});
+    wait.innerHTML = render(d);
+    if (d.conversation_id) conversationId = d.conversation_id;
+    localHistory.push({role: 'user', text: q}, {role: 'assistant', text: d.answer || ''});
+    localHistory = localHistory.slice(-6);
+    if (AUTH && d.conversation_id) loadHistory();
   } catch (err) {
     wait.innerHTML = 'The assistant is unavailable right now. If this is an emergency, get help immediately (call {{ hotline }}).';
   }
 }
+
+function reset() { conversationId = null; localHistory = []; chat.innerHTML = greeting; qEl.focus(); }
+
+async function loadHistory() {
+  const box = document.getElementById('hist'); if (!box) return;
+  const d = await api("{% url 'assistant_history' %}");
+  box.innerHTML = (d.conversations || []).length ? d.conversations.map(c =>
+    `<div class="list-group-item list-group-item-action hist-item d-flex gap-2 px-0" data-id="${c.id}">
+       <span class="flex-grow-1 text-truncate">${E(c.title || 'Conversation')}</span>
+       <button class="btn btn-link btn-sm p-0 text-danger del" data-id="${c.id}" title="Delete"><i class="bi bi-trash"></i></button></div>`).join('')
+    : '<div class="text-muted">No saved conversations.</div>';
+}
+
+async function openConversation(id) {
+  const d = await api("{% url 'assistant_history' %}" + id + '/');
+  chat.innerHTML = greeting; conversationId = d.id; localHistory = [];
+  for (const m of d.messages) {
+    if (m.role === 'user') add('user', E(m.text));
+    else add('bot', render({ok: true, answer: m.text, ...m.meta, disclaimer: ''}));
+    localHistory.push({role: m.role, text: m.text});
+  }
+  localHistory = localHistory.slice(-6);
+}
+
 document.getElementById('ask').onsubmit = e => { e.preventDefault(); const q = qEl.value.trim(); if (!q) return; qEl.value = ''; ask(q); };
 document.querySelectorAll('.suggestion').forEach(b => b.onclick = () => ask(b.textContent));
+document.getElementById('clear').onclick = reset;
+if (AUTH) {
+  loadHistory();
+  document.getElementById('hist').onclick = async e => {
+    const del = e.target.closest('.del');
+    if (del) { e.stopPropagation(); await api("{% url 'assistant_history' %}" + del.dataset.id + '/', {method: 'DELETE'}); if (String(conversationId) === del.dataset.id) reset(); return loadHistory(); }
+    const item = e.target.closest('.hist-item'); if (item) openConversation(item.dataset.id);
+  };
+  document.getElementById('delall').onclick = async () => {
+    if (!confirm('Delete all your saved conversations?')) return;
+    await api("{% url 'assistant_history' %}", {method: 'DELETE'}); reset(); loadHistory();
+  };
+}
 </script>
 {% endblock %}

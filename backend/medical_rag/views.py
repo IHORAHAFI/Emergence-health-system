@@ -1,29 +1,66 @@
 import json
 
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
-from .retriever import DISCLAIMER, answer
+from . import service
+from .retriever import DISCLAIMER
+
+SUGGESTIONS = [
+    "What is malaria?",
+    "What causes high blood pressure?",
+    "What is a normal heart rate?",
+    "What does low oxygen saturation mean?",
+    "What are the symptoms of diabetes?",
+    "When should I seek emergency medical assistance?",
+]
 
 
 def assistant_page(request):
     return render(request, "assistant/assistant.html", {
-        "disclaimer": DISCLAIMER,
-        "suggestions": ["What are the signs of a stroke?", "How do I treat a burn?",
-                        "My child has diarrhoea", "What should I do if someone is choking?"]})
+        "disclaimer": DISCLAIMER, "suggestions": SUGGESTIONS, "history_days": service.history_days(),
+        "is_staff_user": request.user.is_authenticated and (request.user.is_superuser or
+                                                             request.user.role in ("operator", "admin", "hospital", "paramedic"))})
+
+
+def _body(request):
+    try:
+        return json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return request.POST.dict()
 
 
 @require_POST
 def ask(request):
-    """POST {"question": "..."} -> grounded answer with sources (CSRF-protected)."""
+    """POST {"question", "conversation_id"?, "save_history"?, "include_vitals"?, "emergency_ref"?, "history"?}
+    -> grounded answer with sources (CSRF-protected)."""
+    d = _body(request)
     try:
-        q = json.loads(request.body or b"{}").get("question", "")
-    except json.JSONDecodeError:
-        q = request.POST.get("question", "")
-    result = answer(q)
-    result["library"] = related_entries(q, request.user)
+        result = service.ask(request.user, d.get("question", ""), conversation_id=d.get("conversation_id"),
+                             save_history=d.get("save_history", True) not in (False, "false", "0"),
+                             include_vitals=d.get("include_vitals") in (True, "true", "1"),
+                             emergency_ref=(d.get("emergency_ref") or "").strip() or None,
+                             history=d.get("history") if isinstance(d.get("history"), list) else None, request=request)
+    except service.AssistantError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=403)
+    result["library"] = related_entries(d.get("question", ""), request.user)
     return JsonResponse(result)
+
+
+@login_required
+@require_http_methods(["GET", "DELETE"])
+def history(request, pk=None):
+    """GET list / one conversation; DELETE one (pk) or all of the user's conversations."""
+    try:
+        if request.method == "DELETE":
+            return JsonResponse({"deleted": service.delete_conversations(request.user, pk)})
+        if pk:
+            return JsonResponse(service.conversation_detail(request.user, pk))
+        return JsonResponse({"conversations": service.conversations(request.user)})
+    except service.AssistantError as e:
+        return JsonResponse({"error": str(e)}, status=404)
 
 
 def related_entries(question, user, limit=3):

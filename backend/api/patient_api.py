@@ -22,7 +22,7 @@ from rest_framework.response import Response
 
 from medical_rag.disease_views import _visible
 from medical_rag.models import Disease
-from medical_rag.retriever import DISCLAIMER, answer
+from medical_rag.retriever import DISCLAIMER
 from patient_monitoring import services, test_requests as tr
 from patient_monitoring.api import DeviceSerializer
 from patient_monitoring.models import MedicalTestRequest, VitalSignReading
@@ -155,12 +155,34 @@ def disease_detail(request, slug):
 
 @api_view(["POST"])
 def assistant_ask(request):
+    from medical_rag import service
     from medical_rag.views import related_entries
-    q = str(request.data.get("question", ""))[:1000]
-    result = answer(q)
+    d = request.data
+    q = str(d.get("question", ""))[:1000]
+    try:
+        result = service.ask(request.user, q, conversation_id=d.get("conversation_id"),
+                             save_history=d.get("save_history", True) not in (False, "false", "0"),
+                             include_vitals=d.get("include_vitals") in (True, "true", "1"),
+                             emergency_ref=(d.get("emergency_ref") or "").strip() or None,
+                             history=d.get("history") if isinstance(d.get("history"), list) else None,
+                             request=request)
+    except service.AssistantError as e:
+        return _error(e, status.HTTP_403_FORBIDDEN)
     result["library"] = [{**e, "slug": e["url"].rstrip("/").split("/")[-1]} for e in related_entries(q, request.user)]
     result.setdefault("disclaimer", DISCLAIMER)
     return Response(result)
+
+
+@api_view(["GET", "DELETE"])
+def assistant_history(request, pk=None):
+    from medical_rag import service
+    try:
+        if request.method == "DELETE":
+            return Response({"deleted": service.delete_conversations(request.user, pk)})
+        return Response(service.conversation_detail(request.user, pk) if pk else
+                        {"conversations": service.conversations(request.user)})
+    except service.AssistantError as e:
+        return _error(e, status.HTTP_404_NOT_FOUND)
 
 
 __all__ = ["Disease"]
