@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../models/emergency.dart';
 import '../services/api_service.dart';
 import '../services/ble_service.dart';
+import '../theme.dart';
 import '../widgets/common.dart';
 import 'ble_connect_screen.dart';
 import '../widgets/emergency_map.dart';
@@ -132,6 +133,13 @@ class _TrackingScreenState extends State<TrackingScreen> {
                     PriorityBadge(e.priority),
                   ]),
                   const SizedBox(height: 8),
+                  _steps(e.operatorLabel),
+                  if (e.acceptedBy != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('Handled by ${e.acceptedBy}', style: const TextStyle(color: Colors.black54)),
+                    ),
+                  const SizedBox(height: 8),
                   if (e.ambulancePlate != null)
                     Card(
                       child: ListTile(
@@ -155,11 +163,56 @@ class _TrackingScreenState extends State<TrackingScreen> {
                             trailing: TextButton(onPressed: _stopVitals, child: const Text('Stop')),
                           ),
                   const SizedBox(height: 8),
+                  if (e.isActive)
+                    OutlinedButton.icon(
+                        onPressed: _message, icon: const Icon(Icons.chat_outlined), label: const Text('Message the team')),
+                  const SizedBox(height: 8),
                   if (e.isActive && ['pending', 'assigned', 'en_route'].contains(e.status))
                     OutlinedButton(onPressed: _cancel, child: const Text('Cancel request')),
                 ]),
               ),
             ]),
     );
+  }
+
+  /// PENDING -> ACCEPTED -> IN PROGRESS -> COMPLETED (label computed by the server).
+  Widget _steps(String label) {
+    const steps = ['PENDING', 'ACCEPTED', 'IN PROGRESS', 'COMPLETED'];
+    if (label == 'CANCELLED') return const StatusChip('cancelled', 'CANCELLED');
+    final idx = steps.indexOf(label);
+    return Row(children: [
+      for (var i = 0; i < steps.length; i++)
+        Expanded(
+          child: Column(children: [
+            Container(height: 6, margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(color: i <= idx ? AppColors.primary : const Color(0xFFE4E7EC),
+                    borderRadius: BorderRadius.circular(3))),
+            const SizedBox(height: 4),
+            Text(steps[i], style: TextStyle(fontSize: 10, fontWeight: i == idx ? FontWeight.w800 : FontWeight.w500)),
+          ]),
+        ),
+    ]);
+  }
+
+  Future<void> _message() async {
+    final c = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Message the emergency team'),
+        content: TextField(controller: c, maxLines: 3, maxLength: 500, autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(d, c.text.trim()), child: const Text('Send')),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty) return;
+    try {
+      await ApiService.instance.sendEmergencyMessage(widget.emergencyId, text);
+      if (mounted) toast(context, 'Message sent');
+    } catch (err) {
+      if (mounted) toast(context, err, error: true);
+    }
   }
 }

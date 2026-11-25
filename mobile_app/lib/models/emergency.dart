@@ -19,6 +19,13 @@ class Emergency {
   final String patientName;
   final String patientPhone;
   final List<Map<String, dynamic>> logs;
+  /// Full server record (symptoms, escalation summary, ...) for the staff screens.
+  final Map<String, dynamic> raw;
+  String get operatorLabel => (raw['operator_label'] ?? statusDisplay).toString();
+  bool get accepted => raw['accepted_at'] != null;
+  String? get acceptedBy => raw['accepted_by_name'];
+  Map<String, dynamic> get escalation => Map<String, dynamic>.from(raw['escalation'] ?? const {});
+  bool get escalated => raw['escalated_at'] != null;
 
   Emergency({
     required this.id,
@@ -39,6 +46,7 @@ class Emergency {
     this.patientName = '',
     this.patientPhone = '',
     this.logs = const [],
+    this.raw = const {},
   });
 
   bool get isActive => status != 'completed' && status != 'cancelled';
@@ -65,6 +73,7 @@ class Emergency {
       patientName: j['patient_name'] ?? '',
       patientPhone: j['patient_phone'] ?? '',
       logs: ((j['logs'] ?? []) as List).map((e) => Map<String, dynamic>.from(e)).toList(),
+      raw: j,
     );
   }
 }

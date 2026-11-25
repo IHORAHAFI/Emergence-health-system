@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'screens/paramedic_home_screen.dart';
 import 'screens/patient_shell.dart';
+import 'screens/staff/staff_shell.dart';
 import 'services/api_service.dart';
 import 'theme.dart';
 
@@ -53,5 +54,9 @@ class StartupGate extends StatelessWidget {
   }
 }
 
-Widget homeForRole(String? role) =>
-    role == 'paramedic' ? const ParamedicHomeScreen() : const PatientShell();
+/// patient -> patient app, paramedic -> crew screen, operator/admin/medical staff -> staff interface.
+Widget homeForRole(String? role) => switch (role) {
+      'paramedic' => const ParamedicHomeScreen(),
+      'operator' || 'admin' || 'hospital' => StaffShell(role: role!),
+      _ => const PatientShell(),
+    };

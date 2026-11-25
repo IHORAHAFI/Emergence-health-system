@@ -4,6 +4,7 @@ import '../main.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'change_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -72,7 +73,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () => setState(() => _hide = !_hide)),
             ),
           ),
-          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
+                child: const Text('Forgot password?')),
+          ),
+          const SizedBox(height: 8),
           FilledButton(
             onPressed: _busy ? null : _login,
             child: _busy

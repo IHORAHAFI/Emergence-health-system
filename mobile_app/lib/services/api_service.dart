@@ -195,8 +195,48 @@ class ApiService {
 
   Future<Map<String, dynamic>> disease(String slug) async => Map<String, dynamic>.from(await get('/diseases/$slug/'));
 
-  Future<Map<String, dynamic>> ask(String question) async =>
-      Map<String, dynamic>.from(await post('/assistant/ask/', {'question': question}));
+  Future<Map<String, dynamic>> ask(String question,
+          {int? conversationId, bool saveHistory = true, bool includeVitals = false, String? emergencyRef}) async =>
+      Map<String, dynamic>.from(await post('/assistant/ask/', {
+        'question': question,
+        if (conversationId != null) 'conversation_id': conversationId,
+        'save_history': saveHistory,
+        'include_vitals': includeVitals,
+        if (emergencyRef != null) 'emergency_ref': emergencyRef,
+      }));
+
+  Future<List<Map<String, dynamic>>> assistantHistory() async =>
+      List<Map<String, dynamic>>.from(((await get('/assistant/history/'))['conversations'] as List)
+          .map((e) => Map<String, dynamic>.from(e)));
+  Future<Map<String, dynamic>> assistantConversation(int id) async =>
+      Map<String, dynamic>.from(await get('/assistant/history/$id/'));
+  Future<void> deleteAssistantHistory([int? id]) => delete(id == null ? '/assistant/history/' : '/assistant/history/$id/');
+
+  // ---- password ----
+  Future<String> requestPasswordReset(String email) async =>
+      (await post('/auth/password-reset/', {'email': email}))['detail'] ?? '';
+  Future<String> confirmPasswordReset(String uid, String token, String newPassword) async =>
+      (await post('/auth/password-reset/confirm/', {'uid': uid, 'token': token, 'new_password': newPassword}))['detail'] ?? '';
+  Future<String> changePassword(String oldPassword, String newPassword) async =>
+      (await post('/auth/password-change/', {'old_password': oldPassword, 'new_password': newPassword}))['detail'] ?? '';
+
+  // ---- operator / medical staff ----
+  /// Server root (for static files such as the siren), e.g. https://host
+  static String get serverRoot => baseUrl.replaceFirst(RegExp(r'/api/?$'), '');
+  Future<Map<String, dynamic>> staffAlerts() async => Map<String, dynamic>.from(await get('/staff/alerts/'));
+  Future<Map<String, dynamic>> acceptAlert(String key) async =>
+      Map<String, dynamic>.from(await post('/staff/alerts/accept/', {'key': key}));
+  Future<Emergency> acceptEmergency(int id) async => Emergency.fromJson(await post('/emergencies/$id/accept/'));
+  Future<Emergency> updateEmergencyStatus(int id, String status, {String note = ''}) async =>
+      Emergency.fromJson(await post('/emergencies/$id/status/', {'status': status, 'note': note}));
+  Future<void> sendEmergencyMessage(int id, String text) => post('/emergencies/$id/message/', {'text': text});
+  Future<List<VitalReading>> emergencyVitals(String ref) async =>
+      ((await get('/monitoring/$ref/readings/')) as List).map((e) => VitalReading.fromJson(e)).toList();
+  Future<List<Map<String, dynamic>>> staffTests({bool openOnly = true}) async =>
+      ((await get('/staff/tests/', openOnly ? {'open': '1'} : null)) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+  Future<Map<String, dynamic>> testAction(String ref, String action, {String scenario = 'normal'}) async =>
+      Map<String, dynamic>.from(await post('/staff/tests/$ref/action/', {'action': action, 'scenario': scenario}));
+  Future<Map<String, dynamic>> staffStats() async => Map<String, dynamic>.from(await get('/staff/stats/'));
 
   // ---- ambulance (paramedic) ----
   Future<Map<String, dynamic>> myAmbulance() async => Map<String, dynamic>.from(await get('/ambulances/mine/'));

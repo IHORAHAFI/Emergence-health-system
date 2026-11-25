@@ -170,7 +170,9 @@ def escalate(em, reason):
     if not EmergencyRequest.objects.filter(pk=em.pk, escalated_at__isnull=True).update(
             escalated_at=timezone.now(), escalation_reason=reason):
         return None  # already escalated
-    em.refresh_from_db()
+    # Work on a fresh copy: reading related objects (e.g. monitoring consent) on the caller's instance would
+    # cache "no consent" there, and consent given a moment later would then be ignored by the caller.
+    em = EmergencyRequest.objects.select_related("patient", "assigned_hospital", "assigned_ambulance").get(pk=em.pk)
     hotline = getattr(settings, "EMERGENCY_HOTLINE", "912")
     try:
         readings, vitals_note = _vitals(em)

@@ -4,6 +4,7 @@ import '../models/test_request.dart';
 import '../models/vital_reading.dart';
 import '../services/api_service.dart';
 import '../widgets/common.dart';
+import '../widgets/vitals_chart.dart';
 import 'test_detail_screen.dart';
 
 /// Test history with results, plus a log of all measurements (real and simulated, clearly labelled).
@@ -25,7 +26,7 @@ class ResultsTabState extends State<ResultsTab> {
   void reload() => setState(() {
         _data = () async {
           final api = ApiService.instance;
-          return (await api.myTests(), await api.latestVitals(limit: 50));
+          return (await api.myTests(), await api.latestVitals(limit: 100));
         }();
       });
 
@@ -87,10 +88,11 @@ class ResultsTabState extends State<ResultsTab> {
             ? ListView(children: const [EmptyState(Icons.monitor_heart_outlined, 'No measurements yet')])
             : ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: rs.length,
+                itemCount: rs.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (c, i) {
-                  final r = rs[i];
+                  if (i == 0) return VitalsChart(readings: rs);  // trends over time
+                  final r = rs[i - 1];
                   final parts = [
                     if (r.temperature != null) '${r.temperature!.toStringAsFixed(1)} °C',
                     if (r.heartRate != null) '${r.heartRate} BPM',

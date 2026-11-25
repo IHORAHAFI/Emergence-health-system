@@ -69,6 +69,37 @@ class EmergencyViewSet(mixins.CreateModelMixin, mixins.ListModelMixin,
         return Response(EmergencySerializer(em).data)
 
     @action(detail=True, methods=["post"])
+    def accept(self, request, pk=None):
+        """Operator takes responsibility: stops this request's siren (others keep ringing)."""
+        if request.user.role not in STAFF and not request.user.is_superuser:
+            raise PermissionDenied("Only emergency operators can accept requests.")
+        try:
+            em = services.accept_emergency(self.get_object(), request.user)
+        except ValueError as e:
+            raise ValidationError(str(e))
+        return Response(EmergencySerializer(em).data)
+
+    @action(detail=True, methods=["post"])
+    def message(self, request, pk=None):
+        """Short message between the patient and the team handling THIS emergency (stored as notifications)."""
+        from notifications.services import notify_hospital, notify_responders, notify_user
+        em = self.get_object()  # scoped: patients only their own, staff only what they may see
+        text = str(request.data.get("text", "")).strip()[:1000]
+        if not text:
+            raise ValidationError("Type a message.")
+        u = request.user
+        name = u.get_full_name() or u.username
+        if u.role == "patient":
+            notify_responders(f"Message from patient - {em.reference}", f"{name}: {text}", em)
+            if em.assigned_hospital:
+                notify_hospital(em.assigned_hospital, f"Message from patient - {em.reference}", f"{name}: {text}", em)
+        else:
+            notify_user(em.patient, f"Message from the {u.get_role_display().lower()} - {em.reference}",
+                        f"{name}: {text}", em)
+        services.log_status(em, f"Message from {u.get_role_display()}: {text[:150]}", u)
+        return Response({"status": "sent"})
+
+    @action(detail=True, methods=["post"])
     def override_priority(self, request, pk=None):
         if request.user.role not in STAFF:
             raise PermissionDenied()

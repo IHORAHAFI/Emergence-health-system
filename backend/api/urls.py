@@ -8,6 +8,7 @@ from emergency.views import EmergencyViewSet, ai_preview
 from hospitals.views import HospitalViewSet
 from notifications.views import NotificationViewSet
 from . import patient_api as pa
+from . import staff_api as sa
 
 router = DefaultRouter()
 router.register("hospitals", HospitalViewSet, basename="hospital")
@@ -23,6 +24,14 @@ urlpatterns = [
     path("auth/profile/", PatientProfileView.as_view()),
     path("auth/fcm-token/", register_fcm_token),
     path("ai/preview/", ai_preview),
+    path("auth/password-reset/", sa.password_reset),
+    path("auth/password-reset/confirm/", sa.password_reset_confirm),
+    path("auth/password-change/", sa.password_change),
+    path("staff/alerts/", sa.alerts),
+    path("staff/alerts/accept/", sa.alert_accept),
+    path("staff/tests/", sa.tests),
+    path("staff/tests/<str:ref>/action/", sa.test_action),
+    path("staff/stats/", sa.stats),
     path("tests/", pa.tests),
     path("tests/catalog/", pa.test_catalog),
     path("tests/<str:ref>/", pa.test_detail),

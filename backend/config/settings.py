@@ -185,3 +185,15 @@ ALERT_INTERVAL_SECONDS = int(os.getenv("ALERT_INTERVAL_SECONDS", "120"))
 ALERT_ESCALATE_AFTER = int(os.getenv("ALERT_ESCALATE_AFTER", "3"))
 # Siren file played on the operator dashboard (relative to static/)
 ALERT_SIREN_FILE = os.getenv("ALERT_SIREN_FILE", "audio/police_wail_emergency_siren.mp3")
+
+# E-mail (password reset). Without EMAIL_HOST the message is printed to the server log instead of sent.
+if os.getenv("EMAIL_HOST"):
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = os.getenv("EMAIL_HOST")
+    EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@smart-emergency.local")

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'change_password_screen.dart';
 import 'login_screen.dart';
 
 class ProfileTab extends StatefulWidget {
@@ -120,6 +121,12 @@ class _ProfileTabState extends State<ProfileTab> {
         _info(Icons.contact_phone, _c['emergency_contact_name']!.text.isEmpty ? 'Not set' : _c['emergency_contact_name']!.text,
             _c['emergency_contact_phone']!.text),
         const SizedBox(height: 24),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordScreen())),
+          icon: const Icon(Icons.lock_reset),
+          label: const Text('Change password'),
+        ),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: _logout,
           icon: const Icon(Icons.logout),

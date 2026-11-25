@@ -39,10 +39,16 @@ class EmergencySerializer(serializers.ModelSerializer):
     assigned_hospital = HospitalSerializer(read_only=True)
     assigned_ambulance = AmbulanceSerializer(read_only=True)
     logs = StatusLogSerializer(many=True, read_only=True)
+    operator_label = serializers.CharField(read_only=True)  # PENDING / ACCEPTED / IN PROGRESS / COMPLETED
+    accepted_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = EmergencyRequest
         fields = "__all__"
+
+    def get_accepted_by_name(self, em):
+        u = em.accepted_by
+        return (u.get_full_name() or u.username) if u else None
 
 
 class StatusUpdateSerializer(serializers.Serializer):
