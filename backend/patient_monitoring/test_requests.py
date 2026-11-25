@@ -289,26 +289,82 @@ def as_dict(req, with_readings=True, limit=200):
     return d
 
 
+STATUS_LABEL = {  # the four labels operators see on every alert
+    "pending": "PENDING", "accepted": "ACCEPTED", "assigned": "ACCEPTED", "testing": "IN PROGRESS",
+    "en_route": "IN PROGRESS", "on_scene": "IN PROGRESS", "transporting": "IN PROGRESS", "arrived": "IN PROGRESS",
+    "completed": "COMPLETED", "cancelled": "CANCELLED"}
+
+
+def unhandled_alerts():
+    """Every real patient request no operator has handled yet, oldest first.
+    * Emergency: still open (not completed/cancelled) and not accepted by an operator.
+      (Automatic dispatch does not count as handling: a human must acknowledge it.)
+    * Test request: still PENDING (accepting or cancelling it is the existing workflow)."""
+    from django.urls import reverse
+    from emergency.models import EmergencyRequest
+    out = []
+    for e in (EmergencyRequest.objects.filter(accepted_at__isnull=True).exclude(status__in=["completed", "cancelled"])
+              .select_related("patient")[:50]):
+        out.append({"key": f"emergency-{e.pk}", "kind": "emergency", "reference": e.reference,
+                    "patient": e.patient_name or e.patient.get_full_name() or e.patient.username,
+                    "patient_code": f"P-{e.patient_id:05d}", "type": e.get_emergency_type_display(),
+                    "submitted_at": e.created_at.isoformat(), "priority": e.priority,
+                    "status": e.status, "status_label": "PENDING", "status_detail": e.get_status_display(),
+                    "url": reverse("emergency_detail", args=[e.pk])})
+    for r in R.objects.filter(status=R.Status.PENDING).select_related("patient")[:50]:
+        out.append({"key": f"test-{r.reference}", "kind": "test", "reference": r.reference,
+                    "patient": r.patient.get_full_name() or r.patient.username, "patient_code": r.patient_code,
+                    "type": f"Medical test: {r.test_names}", "submitted_at": r.requested_at.isoformat(),
+                    "priority": "high" if r.emergency_id else "medium",
+                    "status": r.status, "status_label": "PENDING", "status_detail": r.get_status_display(),
+                    "url": reverse("test_request_detail", args=[r.reference])})
+    return sorted(out, key=lambda a: a["submitted_at"])
+
+
+def accept_alert(key, operator):
+    """Accept one alert by key ("emergency-<id>" or "test-<ref>")."""
+    from emergency import services as em_services
+    from emergency.models import EmergencyRequest
+    kind, _, ident = key.partition("-")
+    if kind == "emergency" and ident.isdigit():
+        em = EmergencyRequest.objects.filter(pk=int(ident)).first()
+        if em is None:
+            raise TestRequestError("Request not found.")
+        try:
+            em_services.accept_emergency(em, operator)
+        except ValueError as e:
+            raise TestRequestError(str(e))
+        return
+    if kind == "test":
+        req = R.objects.filter(reference=ident).first()
+        if req is None:
+            raise TestRequestError("Request not found.")
+        if req.status == R.Status.PENDING:
+            accept(req, operator)
+        return
+    raise TestRequestError("Unknown alert.")
+
+
 def operator_feed():
-    """What the operator alarm needs: open requests + recent critical alerts (used by polling and after WS nudges)."""
+    """What the operator alarm needs: unhandled requests + open test requests + recent critical vital-sign alerts
+    (used by polling and after WS nudges)."""
     from .models import EmergencyAlert
     pending = list(R.objects.filter(status=R.Status.PENDING).select_related("patient", "emergency")[:50])
     since = timezone.now() - timedelta(minutes=30)
     critical = list(EmergencyAlert.objects.filter(status="open", created_at__gte=since)
                     .select_related("test_request", "emergency")[:20])
-    from emergency.models import EmergencyRequest
-    crit_em = list(EmergencyRequest.objects.filter(status="pending", priority="critical",
-                                                   created_at__gte=since)[:10])
+    alerts = unhandled_alerts()
     return {
+        "alerts": alerts,
+        "alert_count": len(alerts),
         "pending_count": len(pending),
         "open_count": R.objects.filter(status__in=R.OPEN).count(),
         "pending": [{"reference": r.reference, "patient": r.patient.get_full_name() or r.patient.username,
                      "patient_code": r.patient_code, "tests": r.test_names,
                      "requested_at": r.requested_at.isoformat(),
                      "emergency": r.emergency.reference if r.emergency else None} for r in pending],
+        # critical vital-sign threshold alerts (unhandled emergencies are in "alerts" above)
         "critical": [{"id": f"alert-{a.id}", "message": a.message,
                       "reference": (a.test_request or a.emergency).reference if (a.test_request or a.emergency) else ""}
-                     for a in critical]
-                    + [{"id": f"emergency-{e.id}", "message": f"CRITICAL emergency waiting: {e.get_emergency_type_display()}",
-                        "reference": e.reference} for e in crit_em],
+                     for a in critical],
     }

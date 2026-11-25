@@ -31,6 +31,13 @@
       {% for r in em.recommendations %}<tr><td>{{ r.name }}</td><td>{{ r.score }}</td><td>{{ r.distance_km }}</td><td>{{ r.eta_minutes }}m</td><td><small>{{ r.reasons|join:" · " }}</small></td></tr>
       {% empty %}<tr><td colspan="5" class="small text-muted">No recommendation (AI unavailable or no hospital in range with capacity). Choose a hospital manually.</td></tr>{% endfor %}</table></div></div>
     <div class="card p-3 d-flex flex-wrap gap-3">
+      {% if can_dispatch and not em.accepted_at and em.status != 'completed' and em.status != 'cancelled' %}
+      <form method="post" action="{% url 'emergency_action' em.id %}">{% csrf_token %}
+        <input type="hidden" name="action" value="accept">
+        <button class="btn btn-sm btn-danger"><i class="bi bi-check2-circle"></i> Accept request (stop alarm)</button></form>
+      {% elif em.accepted_at %}
+      <span class="badge text-bg-success align-self-center"><i class="bi bi-check2-circle"></i> Accepted{% if em.accepted_by %} by {{ em.accepted_by.get_full_name|default:em.accepted_by.username }}{% endif %} · {{ em.accepted_at|date:"H:i" }}</span>
+      {% endif %}
       {% if next_statuses %}
       <form method="post" action="{% url 'emergency_action' em.id %}" class="d-flex gap-1 flex-wrap">{% csrf_token %}
         <input type="hidden" name="action" value="status">

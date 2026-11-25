@@ -15,7 +15,7 @@
   {% for e in page %}<tr class="clickable" onclick="location='{% url 'emergency_detail' e.id %}'">
     <td class="small">{{ e.reference }}{% if e.is_simulated %} <span class="badge badge-sim">sim</span>{% endif %}</td><td class="small">{{ e.created_at|date:"d M H:i" }}</td>
     <td class="small">{{ e.patient.get_full_name|default:e.patient.username }}</td><td class="small">{{ e.get_emergency_type_display }}</td>
-    <td><span class="badge prio-{{ e.priority }}">{{ e.priority }}</span></td><td class="small">{{ e.get_status_display }}</td>
+    <td><span class="badge prio-{{ e.priority }}">{{ e.priority }}</span></td><td class="small">{% with l=e.operator_label %}<span class="badge {% if l == 'PENDING' %}text-bg-danger{% elif l == 'ACCEPTED' %}text-bg-primary{% elif l == 'IN PROGRESS' %}text-bg-warning{% elif l == 'COMPLETED' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ l }}</span>{% endwith %}<div class="text-muted">{{ e.get_status_display }}</div></td>
     <td class="small">{{ e.assigned_hospital.name|default:"-" }}</td><td class="small">{{ e.assigned_ambulance.plate_number|default:"-" }}</td></tr>
   {% empty %}<tr><td colspan="8" class="text-muted">No emergencies match.</td></tr>{% endfor %}
 </table></div></div>

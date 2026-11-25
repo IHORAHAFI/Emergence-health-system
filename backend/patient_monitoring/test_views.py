@@ -1,4 +1,6 @@
 """Pages for the patient-initiated medical test workflow."""
+import json
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -155,3 +157,18 @@ def test_request_action(request, ref):
 def operator_feed(request):
     """Polled by every operator page (and refreshed instantly by WebSocket nudges)."""
     return JsonResponse(svc.operator_feed())
+
+
+@operator_required
+@require_POST
+def alert_accept(request):
+    """Accept button on the emergency alert panel: {"key": "emergency-12"} -> updated feed."""
+    try:
+        key = json.loads(request.body or b"{}").get("key", "")
+    except json.JSONDecodeError:
+        key = request.POST.get("key", "")
+    try:
+        svc.accept_alert(str(key), request.user)
+    except svc.TestRequestError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+    return JsonResponse({"ok": True, **svc.operator_feed()})

@@ -199,6 +199,27 @@ def create_emergency(patient, data, allow_duplicate=False):
     if profile and profile.notify_emergency_contact and profile.emergency_contact_phone:
         sms(profile.emergency_contact_phone, "Emergency alert",
             f"{patient.get_full_name() or patient.username} requested emergency help ({em.reference}).", em)
+    nudge_operators(em)
+    return em
+
+
+def nudge_operators(em):
+    """Tell open operator dashboards to refresh their alert list (they also poll, so this is best-effort)."""
+    from patient_monitoring.test_requests import push
+    push("operators", "emergency", None, reference=em.reference, status=em.status)
+
+
+def accept_emergency(em, operator):
+    """Operator acknowledges the request: stops the dashboard siren for THIS request only.
+    Dispatch/status are unchanged - the existing workflow continues as before."""
+    if em.status in ("completed", "cancelled"):
+        raise ValueError("This request is already closed.")
+    updated = EmergencyRequest.objects.filter(pk=em.pk, accepted_at__isnull=True).update(
+        accepted_at=timezone.now(), accepted_by=operator)
+    em.refresh_from_db()
+    if updated:
+        log_status(em, f"Accepted by operator {operator.get_full_name() or operator.username}", operator)
+        nudge_operators(em)
     return em
 
 
@@ -218,6 +239,7 @@ def update_status(em, new_status, by=None, note=""):
     em.save()
     log_status(em, note, by)
     notify_user(em.patient, f"Emergency {em.reference} update", f"Status: {em.get_status_display()}", em)
+    nudge_operators(em)
     if new_status in ("transporting", "cancelled") and em.assigned_hospital:
         notify_hospital(em.assigned_hospital, f"{em.reference}: {em.get_status_display()}",
                         emergency_summary(em), em)

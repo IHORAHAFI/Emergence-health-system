@@ -171,6 +171,8 @@ def emergency_action(request, pk):
             if not dispatcher and new not in ("arrived", "completed"):
                 raise ValueError("Healthcare professionals can only confirm arrival or completion.")
             services.update_status(em, new, request.user, request.POST.get("note", ""))
+        elif act == "accept" and dispatcher:
+            services.accept_emergency(em, request.user)
         elif act == "priority" and dispatcher:
             from ai_recommendation.recommender import recommend_hospitals
             em.priority = request.POST["priority"]

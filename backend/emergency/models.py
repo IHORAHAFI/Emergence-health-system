@@ -90,12 +90,27 @@ class EmergencyRequest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     dispatched_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # Operator acknowledgement: the dashboard siren rings until an operator accepts (or the request is closed).
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="accepted_emergencies")
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.reference or self.id} {self.get_emergency_type_display()} [{self.priority}] - {self.get_status_display()}"
+
+    @property
+    def operator_label(self):
+        """PENDING / ACCEPTED / IN PROGRESS / COMPLETED (or CANCELLED) as shown to operators."""
+        if self.status == "cancelled":
+            return "CANCELLED"
+        if self.status == "completed":
+            return "COMPLETED"
+        if not self.accepted_at:
+            return "PENDING"
+        return "ACCEPTED" if self.status in ("pending", "assigned") else "IN PROGRESS"
 
     def save(self, *args, **kwargs):
         if not self.reference:
