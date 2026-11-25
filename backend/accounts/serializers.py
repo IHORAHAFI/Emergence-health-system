@@ -22,7 +22,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
-    role = serializers.ChoiceField(choices=[User.Role.PATIENT, User.Role.PARAMEDIC], default=User.Role.PATIENT)
+    role = serializers.ChoiceField(choices=[User.Role.PATIENT, User.Role.PARAMEDIC, User.Role.CAREGIVER],
+                                   default=User.Role.PATIENT)
 
     class Meta:
         model = User

@@ -174,7 +174,7 @@ def find_duplicate(patient):
             .exclude(status__in=[S.COMPLETED, S.CANCELLED]).first())
 
 
-def create_emergency(patient, data, allow_duplicate=False):
+def create_emergency(patient, data, allow_duplicate=False, auto_dispatch=True):
     if not allow_duplicate:
         existing = find_duplicate(patient)
         if existing:
@@ -189,7 +189,11 @@ def create_emergency(patient, data, allow_duplicate=False):
     log_status(em, note, patient)
     profile = getattr(patient, "patient_profile", None)
     try:
-        dispatch(em)
+        if auto_dispatch:
+            dispatch(em)
+        else:  # e.g. automatic incident without a confirmed location: a human must confirm where to send help
+            log_status(em, "Not dispatched automatically: location not confirmed - operator must contact the patient")
+            notify_responders(f"LOCATION NEEDED {em.reference}", emergency_summary(em), em)
     except Exception:
         # Even if dispatch crashes, the request exists and humans are told.
         log.exception("Automatic dispatch failed for %s", em.reference)

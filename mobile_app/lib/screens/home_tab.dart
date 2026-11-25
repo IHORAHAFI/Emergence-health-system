@@ -5,7 +5,11 @@ import '../models/vital_reading.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'accessibility_settings_screen.dart';
 import 'assistant_screen.dart';
+import 'home_monitoring_screen.dart';
+import 'speak_for_me_screen.dart';
+import 'voice_assistant_screen.dart';
 import 'diseases_screen.dart';
 import 'emergency_history_screen.dart';
 import 'emergency_request_screen.dart';
@@ -62,6 +66,14 @@ class _HomeTabState extends State<HomeTab> {
         const Text('How can we help today?', style: TextStyle(color: Colors.black54)),
         const SizedBox(height: 16),
         if (_active != null) _activeCard(_active!) else _sosButton(),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _bigAction(Icons.mic, 'Talk to assistant', AppColors.primary,
+              () => _open(const VoiceAssistantScreen()))),
+          const SizedBox(width: 12),
+          Expanded(child: _bigAction(Icons.touch_app, "I can't speak", const Color(0xFF7F56D9),
+              () => _open(const SpeakForMeScreen()))),
+        ]),
         const SectionTitle('Latest vital signs'),
         if (_loading)
           const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
@@ -101,18 +113,22 @@ class _HomeTabState extends State<HomeTab> {
           crossAxisSpacing: 12,
           children: [
             _tile(Icons.biotech, 'Request test', () => widget.onGo(1)),
+            _tile(Icons.monitor_heart, 'Results', () => widget.onGo(2)),
+            _tile(Icons.sensors, 'Home monitoring', () => _open(const HomeMonitoringScreen())),
+            _tile(Icons.smart_toy_outlined, 'Chat assistant', () => _open(const AssistantScreen())),
+            _tile(Icons.menu_book, 'Diseases', () => _open(const DiseasesScreen())),
             _tile(Icons.local_hospital, 'Hospitals', () => _open(const NearbyHospitalsScreen())),
             _tile(Icons.history, 'My requests', () => _open(const EmergencyHistoryScreen())),
-            _tile(Icons.menu_book, 'Diseases', () => _open(const DiseasesScreen())),
-            _tile(Icons.smart_toy_outlined, 'AI assistant', () => _open(const AssistantScreen())),
-            _tile(Icons.monitor_heart, 'Results', () => widget.onGo(2)),
+            _tile(Icons.accessibility_new, 'Accessibility', () => _open(const AccessibilitySettingsScreen())),
           ],
         ),
       ]),
     );
   }
 
-  Widget _sosButton() => Material(
+  Widget _sosButton() => Semantics(button: true, label: 'Get emergency help', child: _sosInner());
+
+  Widget _sosInner() => Material(
         color: AppColors.emergency,
         borderRadius: BorderRadius.circular(28),
         child: InkWell(
@@ -149,6 +165,27 @@ class _HomeTabState extends State<HomeTab> {
               : 'Active emergency · ${e.typeDisplay}'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _open(TrackingScreen(emergencyId: e.id)),
+        ),
+      );
+
+  Widget _bigAction(IconData icon, String label, Color color, VoidCallback onTap) => Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: color,
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: onTap,
+            child: SizedBox(
+              height: 96,
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, color: Colors.white, size: 36),
+                const SizedBox(height: 4),
+                Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+              ]),
+            ),
+          ),
         ),
       );
 

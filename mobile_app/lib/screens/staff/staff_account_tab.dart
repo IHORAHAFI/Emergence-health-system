@@ -11,7 +11,7 @@ class StaffAccountTab extends StatelessWidget {
 
   static const roleNames = {
     'operator': 'Emergency operator', 'admin': 'Administrator', 'hospital': 'Healthcare professional',
-    'paramedic': 'Ambulance crew',
+    'paramedic': 'Ambulance crew', 'caregiver': 'Caregiver',
   };
 
   @override

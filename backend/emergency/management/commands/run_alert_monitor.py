@@ -15,7 +15,8 @@ class Command(BaseCommand):
 
     def handle(self, *a, **o):
         while True:
-            n = escalation.tick()
+            from patient_monitoring import proactive
+            n = escalation.tick() + proactive.tick()
             if n:
                 self.stdout.write(f"{n} alert(s) advanced")
             if o["once"]:

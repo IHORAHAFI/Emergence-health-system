@@ -20,6 +20,7 @@ class AlertsTab extends StatefulWidget {
 
 class _AlertsTabState extends State<AlertsTab> {
   List<Map<String, dynamic>> _alerts = [];
+  List<Map<String, dynamic>> _events = []; // proactive monitoring events (AI summaries)
   String _siren = '';
   Object? _error;
   bool _loaded = false;
@@ -47,9 +48,15 @@ class _AlertsTabState extends State<AlertsTab> {
     try {
       final d = data ?? await ApiService.instance.staffAlerts();
       final list = ((d['alerts'] ?? []) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      List<Map<String, dynamic>> evs = _events;
+      try {
+        evs = ((await ApiService.instance.get('/staff/events/', {'open': '1'})) as List)
+            .map((e) => Map<String, dynamic>.from(e)).toList();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _alerts = list;
+        _events = evs;
         _siren = (d['siren_url'] ?? '').toString();
         _error = null;
         _loaded = true;
@@ -122,11 +129,14 @@ class _AlertsTabState extends State<AlertsTab> {
             ? (_error != null ? ErrorRetry(_error!, _load) : const Center(child: CircularProgressIndicator()))
             : RefreshIndicator(
                 onRefresh: _load,
-                child: _alerts.isEmpty
-                    ? ListView(children: const [EmptyState(Icons.check_circle_outline, 'All patient requests are handled')])
-                    : ListView(padding: const EdgeInsets.all(12), children: [
-                        for (final a in _alerts.reversed) _card(a, a == _alerts.last),
-                      ]),
+                child: ListView(padding: const EdgeInsets.all(12), children: [
+                  if (_alerts.isEmpty) const EmptyState(Icons.check_circle_outline, 'All patient requests are handled'),
+                  for (final a in _alerts.reversed) _card(a, a == _alerts.last),
+                  if (_events.isNotEmpty) ...[
+                    const SectionTitle('Monitoring (AI)'),
+                    for (final e in _events) _eventCard(e),
+                  ],
+                ]),
               ),
       ),
     ]);
@@ -184,6 +194,50 @@ class _AlertsTabState extends State<AlertsTab> {
       ),
     );
   }
+
+  Widget _eventCard(Map<String, dynamic> e) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                _tag((e['severity'] ?? '').toString().toUpperCase(),
+                    e['severity'] == 'severe' ? AppColors.emergency : e['severity'] == 'urgent' ? AppColors.warn : AppColors.primary),
+                _tag(e['status_display'] ?? '', Colors.black54),
+                if (e['simulated'] == true) _tag('SIMULATED', AppColors.simulated),
+              ]),
+              const SizedBox(height: 6),
+              Text('${e['patient']} · ${e['kind_display']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              Text(ago(DateTime.parse(e['created_at']).toLocal()), style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              const SizedBox(height: 6),
+              Text((e['summary'] ?? '').toString().isNotEmpty ? e['summary'] : e['reason'], style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 8),
+              Row(children: [
+                if (e['emergency_id'] != null)
+                  TextButton.icon(
+                    onPressed: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => StaffEmergencyScreen(emergencyId: e['emergency_id']))).then((_) => _load()),
+                    icon: const Icon(Icons.emergency),
+                    label: Text('Emergency ${e['emergency_ref']}'),
+                  ),
+                const Spacer(),
+                OutlinedButton(
+                  onPressed: () async {
+                    try {
+                      await ApiService.instance.post('/staff/events/${e['id']}/close/', {'note': 'handled from mobile'});
+                      _load();
+                    } catch (err) {
+                      if (mounted) toast(context, err, error: true);
+                    }
+                  },
+                  child: const Text('I handled it'),
+                ),
+              ]),
+            ]),
+          ),
+        ),
+      );
 
   Widget _tag(String t, Color c) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

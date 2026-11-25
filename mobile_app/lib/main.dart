@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
 import 'screens/paramedic_home_screen.dart';
 import 'screens/patient_shell.dart';
+import 'screens/caregiver/caregiver_shell.dart';
 import 'screens/staff/staff_shell.dart';
+import 'services/local_notify.dart';
+import 'services/prefs_service.dart';
 import 'services/api_service.dart';
 import 'theme.dart';
 
@@ -12,6 +15,8 @@ final navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiService.instance.loadToken();
+  await PrefsService.instance.load();
+  await LocalNotify.instance.init();
   // Expired session -> back to login from anywhere.
   ApiService.instance.onSessionExpired = () => navigatorKey.currentState
       ?.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
@@ -23,11 +28,26 @@ class SmartEmergencyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: PrefsService.instance,
+      builder: (context, _, __) => _app(),
+    );
+  }
+
+  Widget _app() {
     return MaterialApp(
       title: 'Smart Emergency',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
-      theme: buildTheme(),
+      theme: PrefsService.instance.p.highContrast ? buildHighContrastTheme() : buildTheme(),
+      // patient's text-size choice applies everywhere (on top of the phone's own font setting)
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final scale = PrefsService.instance.p.textScale;
+        return MediaQuery(
+            data: mq.copyWith(textScaler: TextScaler.linear((mq.textScaler.scale(1) * scale).clamp(0.8, 2.5))),
+            child: child!);
+      },
       home: const StartupGate(),
     );
   }
@@ -58,5 +78,6 @@ class StartupGate extends StatelessWidget {
 Widget homeForRole(String? role) => switch (role) {
       'paramedic' => const ParamedicHomeScreen(),
       'operator' || 'admin' || 'hospital' => StaffShell(role: role!),
+      'caregiver' => const CaregiverShell(),
       _ => const PatientShell(),
     };

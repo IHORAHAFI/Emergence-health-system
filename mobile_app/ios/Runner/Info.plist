@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Talk to your medical assistant instead of typing.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turn what you say into text for your medical assistant. Audio is not stored.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Detect a possible fall while the app is open, if you switch this on.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Connect your thermometer, oximeter or blood-pressure monitor.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

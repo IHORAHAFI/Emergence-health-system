@@ -10,6 +10,33 @@ class AppColors {
   static const surface = Color(0xFFF4F8F9);
 }
 
+/// High contrast (black / yellow, WCAG AAA-level contrast) for patients with low vision.
+ThemeData buildHighContrastTheme() {
+  const yellow = Color(0xFFFFE600);
+  final scheme = const ColorScheme.dark(
+      primary: yellow, onPrimary: Colors.black, secondary: yellow, onSecondary: Colors.black,
+      surface: Colors.black, onSurface: Colors.white, error: Color(0xFFFF5C5C), onError: Colors.black);
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: Colors.black,
+    appBarTheme: const AppBarTheme(backgroundColor: Colors.black, foregroundColor: yellow,
+        titleTextStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: yellow)),
+    cardTheme: CardThemeData(color: Colors.black, margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: yellow, width: 2))),
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(60),
+        backgroundColor: yellow, foregroundColor: Colors.black,
+        textStyle: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(56),
+        foregroundColor: yellow, side: const BorderSide(color: yellow, width: 2))),
+    textTheme: const TextTheme().apply(bodyColor: Colors.white, displayColor: Colors.white),
+    navigationBarTheme: NavigationBarThemeData(height: 76, backgroundColor: Colors.black,
+        indicatorColor: yellow, iconTheme: WidgetStateProperty.resolveWith((s) =>
+            IconThemeData(color: s.contains(WidgetState.selected) ? Colors.black : yellow, size: 28)),
+        labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: yellow))),
+  );
+}
+
 ThemeData buildTheme() {
   final scheme = ColorScheme.fromSeed(seedColor: AppColors.primary, primary: AppColors.primary, error: AppColors.emergency);
   return ThemeData(

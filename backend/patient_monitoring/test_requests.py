@@ -362,6 +362,8 @@ def operator_feed():
     from .models import EmergencyAlert
     try:
         escalation.tick()  # advance the per-request siren counters (idempotent, safe under concurrent polls)
+        from . import proactive
+        proactive.tick()   # re-prompt patients, handle no-response, start due check-ins
     except Exception:
         log.exception("alert tick failed")
     pending = list(R.objects.filter(status=R.Status.PENDING).select_related("patient", "emergency")[:50])

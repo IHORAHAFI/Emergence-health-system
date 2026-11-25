@@ -9,6 +9,7 @@ class User(AbstractUser):
         HOSPITAL = "hospital", "Healthcare professional"
         OPERATOR = "operator", "Emergency operator"
         ADMIN = "admin", "Administrator"
+        CAREGIVER = "caregiver", "Caregiver"
 
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.PATIENT)
     phone = models.CharField(max_length=20, blank=True)
@@ -57,3 +58,30 @@ class PatientProfile(models.Model):
         d = date.today()
         b = self.date_of_birth
         return d.year - b.year - ((d.month, d.day) < (b.month, b.day))
+
+
+class CaregiverLink(models.Model):
+    """A patient authorises a caregiver account. Each permission is chosen by the patient and can be revoked.
+    The caregiver joins with a one-time invite code the patient shares with them."""
+
+    class Status(models.TextChoices):
+        INVITED = "invited", "Invited (code not used yet)"
+        ACTIVE = "active", "Active"
+        REVOKED = "revoked", "Revoked"
+
+    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="caregiver_links")
+    caregiver = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE, related_name="cared_for_links")
+    relationship = models.CharField(max_length=50, blank=True)
+    invite_code = models.CharField(max_length=12, unique=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.INVITED)
+    can_request_emergency = models.BooleanField(default=True)
+    can_request_tests = models.BooleanField(default=True)
+    can_respond_checkins = models.BooleanField(default=True)
+    can_view_vitals = models.BooleanField(default=False)
+    receives_notifications = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.caregiver or 'invite'} -> {self.patient} [{self.status}]"

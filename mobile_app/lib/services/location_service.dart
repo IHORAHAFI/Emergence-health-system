@@ -1,5 +1,7 @@
 import 'package:geolocator/geolocator.dart';
 
+import 'api_service.dart';
+
 class LocationService {
   /// Returns current high-accuracy GPS position, asking for permission if needed.
   static Future<Position> current() async {
@@ -17,4 +19,11 @@ class LocationService {
   static Stream<Position> stream() => Geolocator.getPositionStream(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 20),
       );
+
+  /// Store the last location for automatic emergencies - the server keeps it only if the patient allowed that.
+  static Future<void> report(Position p) async {
+    try {
+      await ApiService.instance.post('/monitoring/location/', {'latitude': p.latitude, 'longitude': p.longitude});
+    } catch (_) {}
+  }
 }

@@ -9,6 +9,7 @@ from hospitals.views import HospitalViewSet
 from notifications.views import NotificationViewSet
 from . import patient_api as pa
 from . import staff_api as sa
+from . import proactive_api as pr
 
 router = DefaultRouter()
 router.register("hospitals", HospitalViewSet, basename="hospital")
@@ -27,6 +28,22 @@ urlpatterns = [
     path("auth/password-reset/", sa.password_reset),
     path("auth/password-reset/confirm/", sa.password_reset_confirm),
     path("auth/password-change/", sa.password_change),
+    path("assistant/preferences/", pr.preferences),
+    path("home-monitoring/consent/", pr.home_consent),
+    path("home-monitoring/readings/", pr.home_reading),
+    path("monitoring/location/", pr.location),
+    path("monitoring/events/", pr.events),
+    path("monitoring/events/<int:pk>/respond/", pr.event_respond),
+    path("caregivers/", pr.caregiver_links),
+    path("caregivers/invite/", pr.caregiver_invite),
+    path("caregivers/accept/", pr.caregiver_accept),
+    path("caregivers/<int:pk>/", pr.caregiver_link),
+    path("caregivers/patients/<int:pid>/", pr.caregiver_patient),
+    path("caregivers/patients/<int:pid>/emergency/", pr.caregiver_emergency),
+    path("caregivers/patients/<int:pid>/tests/", pr.caregiver_tests),
+    path("caregivers/patients/<int:pid>/report/", pr.caregiver_report),
+    path("staff/events/", pr.staff_events),
+    path("staff/events/<int:pk>/close/", pr.staff_event_close),
     path("staff/alerts/", sa.alerts),
     path("staff/alerts/accept/", sa.alert_accept),
     path("staff/tests/", sa.tests),

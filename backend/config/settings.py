@@ -197,3 +197,7 @@ if os.getenv("EMAIL_HOST"):
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@smart-emergency.local")
+
+# Proactive assistant: re-ask an unanswered question every N seconds, at most M times, then escalate to humans
+MONITOR_PROMPT_INTERVAL_SECONDS = int(os.getenv("MONITOR_PROMPT_INTERVAL_SECONDS", "60"))
+MONITOR_MAX_PROMPTS = int(os.getenv("MONITOR_MAX_PROMPTS", "3"))

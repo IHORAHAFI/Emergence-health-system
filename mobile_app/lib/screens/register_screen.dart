@@ -56,7 +56,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'patient', icon: Icon(Icons.person), label: Text('Patient')),
-            ButtonSegment(value: 'paramedic', icon: Icon(Icons.local_shipping_outlined), label: Text('Ambulance crew')),
+            ButtonSegment(value: 'caregiver', icon: Icon(Icons.family_restroom), label: Text('Caregiver')),
+            ButtonSegment(value: 'paramedic', icon: Icon(Icons.local_shipping_outlined), label: Text('Crew')),
           ],
           selected: {_role},
           onSelectionChanged: (s) => setState(() => _role = s.first),

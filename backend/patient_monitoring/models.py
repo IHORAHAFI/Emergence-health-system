@@ -4,9 +4,17 @@ from django.db import models
 
 
 class MonitoringConsent(models.Model):
-    """Explicit patient consent to collect and share vital signs for ONE emergency."""
-    emergency = models.OneToOneField("emergency.EmergencyRequest", on_delete=models.CASCADE,
+    """Explicit patient consent to collect and share vital signs.
+    scope "emergency": for ONE emergency (emergency set). scope "home": ongoing home monitoring (no emergency) -
+    readings from the patient's own devices are checked automatically and may trigger AI check-ins / escalation."""
+
+    class Scope(models.TextChoices):
+        EMERGENCY = "emergency", "One emergency"
+        HOME = "home", "Ongoing home monitoring"
+
+    emergency = models.OneToOneField("emergency.EmergencyRequest", null=True, blank=True, on_delete=models.CASCADE,
                                      related_name="monitoring_consent")
+    scope = models.CharField(max_length=10, choices=Scope.choices, default=Scope.EMERGENCY)
     patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
     consented_at = models.DateTimeField(auto_now_add=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
@@ -188,7 +196,8 @@ class VitalSignReading(models.Model):
         indexes = [models.Index(fields=["emergency", "-measured_at"])]
 
     def __str__(self):
-        ref = self.emergency.reference if self.emergency_id else self.test_request.reference
+        ref = (self.emergency.reference if self.emergency_id else
+               self.test_request.reference if self.test_request_id else "home")
         return f"{ref} @ {self.measured_at:%H:%M:%S} ({self.source})"
 
     @property
@@ -418,7 +427,8 @@ class EmergencyAlert(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{(self.emergency or self.test_request).reference} {self.message}"
+        ctx = self.emergency or self.test_request
+        return f"{ctx.reference if ctx else 'home'} {self.message}"
 
 
 class AccessAuditLog(models.Model):
@@ -433,3 +443,98 @@ class AccessAuditLog(models.Model):
 
     class Meta:
         ordering = ["-at"]
+
+
+# ------------------------------------------------------------------ proactive assistant
+class AssistantPreferences(models.Model):
+    """Per-patient settings for the proactive / accessible assistant (set by the patient or a permitted caregiver)."""
+    patient = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assistant_prefs")
+    language = models.CharField(max_length=5, default="en", help_text="en / fr / rw (speech support depends on the phone)")
+    voice_rate = models.FloatField(default=0.45, help_text="Text-to-speech speed 0.1 (slow) - 1.0 (fast)")
+    voice_assistant = models.BooleanField(default=True)
+    spoken_responses = models.BooleanField(default=True)
+    ai_voice_checkins = models.BooleanField(default=True, help_text="AI may start a spoken check-in when the app is open")
+    voice_navigation = models.BooleanField(default=True)
+    hands_free = models.BooleanField(default=False, help_text="Listen for help phrases while the app is open")
+    fall_detection = models.BooleanField(default=False, help_text="Phone motion sensor, only while the app runs")
+    text_scale = models.FloatField(default=1.0)
+    high_contrast = models.BooleanField(default=False)
+    simplified = models.BooleanField(default=False)
+    checkins_enabled = models.BooleanField(default=False)
+    checkin_times = models.JSONField(default=list, blank=True, help_text='Local times, e.g. ["08:00", "18:00"]')
+    notify_caregivers = models.BooleanField(default=True)
+    share_location_on_escalation = models.BooleanField(
+        default=False, help_text="Patient consents that the last location the app shared is used for an automatic emergency")
+    last_latitude = models.FloatField(null=True, blank=True)
+    last_longitude = models.FloatField(null=True, blank=True)
+    last_location_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Assistant preferences of {self.patient}"
+
+
+class MonitoringEvent(models.Model):
+    """Something that may need the patient's attention: a concerning home reading, a scheduled check-in, a possible
+    fall, a symptom report (patient or caregiver). The AI asks the patient; no answer or a request for help escalates
+    to humans. Every step is kept in `log` with its author: ai / patient / caregiver / device / system."""
+
+    class Kind(models.TextChoices):
+        VITAL_SIGNS = "vital_signs", "Concerning vital signs"
+        CHECK_IN = "check_in", "Scheduled check-in"
+        POSSIBLE_FALL = "possible_fall", "Possible fall (phone sensor)"
+        PATIENT_REPORT = "patient_report", "Reported by the patient"
+        CAREGIVER_REPORT = "caregiver_report", "Reported by a caregiver"
+        CONTACT_REQUEST = "contact_request", "Patient asks to talk to a health professional"
+
+    class Severity(models.TextChoices):
+        INFO = "info", "Information"
+        CONCERN = "concern", "Needs attention"
+        URGENT = "urgent", "Urgent"
+        SEVERE = "severe", "Severe - immediate human escalation"
+
+    class Status(models.TextChoices):
+        AWAITING = "awaiting_response", "Waiting for the patient"
+        OK = "responded_ok", "Patient says they are OK"
+        HELP = "needs_help", "Patient asked for help"
+        NO_RESPONSE = "no_response", "No response"
+        ESCALATED = "escalated", "Escalated to humans"
+        CLOSED = "closed", "Closed"
+
+    OPEN = ("awaiting_response", "needs_help", "no_response", "escalated")
+
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="monitoring_events")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    severity = models.CharField(max_length=10, choices=Severity.choices, default=Severity.CONCERN)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.AWAITING)
+    source = models.CharField(max_length=20, help_text="device / ai_schedule / phone_sensor / patient / caregiver")
+    reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+")
+    is_simulated = models.BooleanField(default=False, help_text="Triggered by SIMULATED measurements")
+    readings = models.ManyToManyField(VitalSignReading, blank=True, related_name="monitoring_events")
+    reason = models.CharField(max_length=255)
+    prompt = models.CharField(max_length=255, help_text="What the AI asks the patient")
+    prompt_count = models.PositiveSmallIntegerField(default=0)
+    last_prompt_at = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    response = models.JSONField(default=dict, blank=True, help_text="Last structured answer (answer, symptoms, pain...)")
+    log = models.JSONField(default=list, blank=True)
+    summary = models.TextField(blank=True, help_text="AI summary for operators / staff")
+    emergency = models.ForeignKey("emergency.EmergencyRequest", null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name="monitoring_events")
+    escalated_at = models.DateTimeField(null=True, blank=True)
+    staff_notified_at = models.DateTimeField(null=True, blank=True)
+    caregivers_notified_at = models.DateTimeField(null=True, blank=True)
+    dedupe_key = models.CharField(max_length=80, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} - {self.patient} [{self.status}]"
+
+    @property
+    def is_open(self):
+        return self.status in self.OPEN

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'accessibility_settings_screen.dart';
+import 'caregivers_screen.dart';
 import 'change_password_screen.dart';
 import 'login_screen.dart';
 
@@ -121,6 +123,18 @@ class _ProfileTabState extends State<ProfileTab> {
         _info(Icons.contact_phone, _c['emergency_contact_name']!.text.isEmpty ? 'Not set' : _c['emergency_contact_name']!.text,
             _c['emergency_contact_phone']!.text),
         const SizedBox(height: 24),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccessibilitySettingsScreen())),
+          icon: const Icon(Icons.accessibility_new),
+          label: const Text('Accessibility, voice & monitoring'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CaregiversScreen())),
+          icon: const Icon(Icons.family_restroom),
+          label: const Text('My caregivers'),
+        ),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordScreen())),
           icon: const Icon(Icons.lock_reset),
