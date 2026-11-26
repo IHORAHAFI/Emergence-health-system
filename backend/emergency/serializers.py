@@ -40,11 +40,22 @@ class EmergencySerializer(serializers.ModelSerializer):
     assigned_ambulance = AmbulanceSerializer(read_only=True)
     logs = StatusLogSerializer(many=True, read_only=True)
     operator_label = serializers.CharField(read_only=True)  # PENDING / ACCEPTED / IN PROGRESS / COMPLETED
+    location_status = serializers.SerializerMethodField()  # live / last_known / manual / simulated / unavailable
     accepted_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = EmergencyRequest
         fields = "__all__"
+
+    def get_location_status(self, em):
+        from .location import status
+        return status(em)
+
+    def to_representation(self, em):
+        data = super().to_representation(em)
+        if em.location_source == "none":  # never hand out placeholder coordinates as a position
+            data["latitude"] = data["longitude"] = None
+        return data
 
     def get_accepted_by_name(self, em):
         u = em.accepted_by

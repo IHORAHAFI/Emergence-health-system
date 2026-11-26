@@ -9,8 +9,9 @@ class Emergency {
   final String status;
   final String statusDisplay;
   final String priority;
-  final double latitude;
-  final double longitude;
+  /// null when no location was shared (the server never sends placeholder coordinates)
+  final double? latitude;
+  final double? longitude;
   final double? etaMinutes;
   final Hospital? hospital;
   final String? ambulancePlate;
@@ -26,6 +27,10 @@ class Emergency {
   String? get acceptedBy => raw['accepted_by_name'];
   Map<String, dynamic> get escalation => Map<String, dynamic>.from(raw['escalation'] ?? const {});
   bool get escalated => raw['escalated_at'] != null;
+  /// live / last_known / manual / simulated / unavailable (computed by the server)
+  Map<String, dynamic> get location => Map<String, dynamic>.from(raw['location_status'] ?? const {});
+  String get locationState => (location['state'] ?? (latitude == null ? 'unavailable' : 'manual')).toString();
+  String get locationLabel => (location['label'] ?? (latitude == null ? 'LOCATION UNAVAILABLE' : 'LOCATION')).toString();
 
   Emergency({
     required this.id,
@@ -36,8 +41,8 @@ class Emergency {
     required this.status,
     required this.statusDisplay,
     required this.priority,
-    required this.latitude,
-    required this.longitude,
+    this.latitude,
+    this.longitude,
     this.etaMinutes,
     this.hospital,
     this.ambulancePlate,
@@ -63,8 +68,8 @@ class Emergency {
       status: j['status'],
       statusDisplay: j['status_display'] ?? j['status'],
       priority: j['priority'] ?? 'medium',
-      latitude: (j['latitude'] as num).toDouble(),
-      longitude: (j['longitude'] as num).toDouble(),
+      latitude: (j['latitude'] as num?)?.toDouble(),
+      longitude: (j['longitude'] as num?)?.toDouble(),
       etaMinutes: (j['eta_minutes'] as num?)?.toDouble(),
       hospital: hosp is Map<String, dynamic> ? Hospital.fromJson(hosp) : null,
       ambulancePlate: amb is Map ? amb['plate_number'] : null,

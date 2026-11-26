@@ -364,3 +364,14 @@ def reports(request):
         "overridden": qs.filter(priority_overridden=True).count(),
         "fallback": qs.filter(triage_method="rule_fallback").count(),
     })
+
+
+@staff_required
+def live_locations(request):
+    """Active emergencies with their location status for the operator maps (polled + WebSocket nudges)."""
+    from django.http import JsonResponse
+    from . import location
+    now = timezone.now()
+    active = _scope(request.user).exclude(status__in=ACTIVE_EXCLUDE).select_related("patient")[:200]
+    return JsonResponse({"emergencies": [location.marker(e, now) for e in active],
+                         "live_seconds": location.live_seconds()})

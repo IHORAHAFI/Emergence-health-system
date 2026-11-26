@@ -31,6 +31,7 @@ class EmergencyRequest(models.Model):
         GPS = "gps", "Device GPS (patient consented)"
         MANUAL = "manual", "Selected manually on map"
         SIMULATED = "simulated", "Simulated (demo)"
+        NONE = "none", "Location not available"  # e.g. automatic alert without a shared location - never invented
 
     reference = models.CharField(max_length=24, unique=True, editable=False,
                                  help_text="Unique emergency reference number, e.g. EMG-20261122-7F3A2C")
@@ -43,6 +44,8 @@ class EmergencyRequest(models.Model):
     location_accuracy_m = models.FloatField(null=True, blank=True)
     location_source = models.CharField(max_length=10, choices=LocationSource.choices, default=LocationSource.GPS)
     location_consent = models.BooleanField(default=False, help_text="Patient explicitly agreed to share this location")
+    location_updated_at = models.DateTimeField(null=True, blank=True,
+                                               help_text="When the patient's latest location was received")
     location_description = models.CharField(max_length=255, blank=True,
                                             help_text="Landmark / address typed by the patient")
     triage_method = models.CharField(max_length=20, default="ml_model",
@@ -132,6 +135,22 @@ class EmergencyRequest(models.Model):
     @property
     def is_active(self):
         return self.status not in (self.Status.COMPLETED, self.Status.CANCELLED)
+
+
+class EmergencyLocation(models.Model):
+    """Location history of one emergency (audit + route). A row is written only when the patient really moved,
+    so a phone sending the same position every few seconds does not fill the table."""
+    emergency = models.ForeignKey(EmergencyRequest, on_delete=models.CASCADE, related_name="location_history")
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    accuracy_m = models.FloatField(null=True, blank=True)
+    source = models.CharField(max_length=10, choices=EmergencyRequest.LocationSource.choices)
+    recorded_at = models.DateTimeField(help_text="Time the device measured the position")
+    received_at = models.DateTimeField(auto_now_add=True)
+    submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["-recorded_at"]
 
 
 class StatusLog(models.Model):

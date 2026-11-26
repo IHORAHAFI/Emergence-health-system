@@ -387,7 +387,9 @@ def escalate(ev, reason):
                               "cardiac" if "chest_pain" in syms else "other",
             "description": f"AUTOMATIC ({ev.get_kind_display()}, {reason}). {ev.summary}"[:2000],
             "latitude": lat, "longitude": lng,
-            "location_source": "gps" if located else "manual",
+            # without consent/location the coordinates are only a placeholder for the required field: the
+            # source "none" makes every map show LOCATION UNAVAILABLE instead of a marker
+            "location_source": "gps" if located else "none",
             "location_consent": bool(located),
             "location_description": "" if located else "LOCATION NOT SHARED - call the patient / caregiver to confirm",
             "breathing_difficulty": "cannot_breathe" in syms or _low_oxygen(ev),

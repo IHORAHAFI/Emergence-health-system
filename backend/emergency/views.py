@@ -69,6 +69,21 @@ class EmergencyViewSet(mixins.CreateModelMixin, mixins.ListModelMixin,
         return Response(EmergencySerializer(em).data)
 
     @action(detail=True, methods=["post"])
+    def location(self, request, pk=None):
+        """Patient's phone sends its live GPS position for its own open emergency."""
+        from . import location as loc
+        em = self.get_object()
+        if em.patient_id != request.user.id:
+            raise PermissionDenied("Only the patient can share their own location.")
+        d = request.data
+        try:
+            st, stored = loc.update(em, request.user, d.get("latitude"), d.get("longitude"), d.get("accuracy"),
+                                    d.get("timestamp"), d.get("source", "gps"))
+        except loc.LocationError as e:
+            raise ValidationError(str(e))
+        return Response({"location": st, "stored": stored})
+
+    @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
         """Operator takes responsibility: stops this request's siren (others keep ringing)."""
         if request.user.role not in STAFF and not request.user.is_superuser:

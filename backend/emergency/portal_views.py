@@ -13,7 +13,7 @@ from ai_recommendation.recommender import recommend_hospitals
 from ambulances.models import Ambulance
 from hospitals.models import Hospital
 from notifications.models import Notification
-from . import services
+from . import location, services
 from .forms import EmergencyRequestForm
 from .models import EmergencyRequest
 
@@ -160,7 +160,8 @@ def track_json(request, ref):
     return JsonResponse({
         "reference": em.reference, "status": em.status, "status_display": em.get_status_display(),
         "priority": em.priority, "eta_minutes": em.eta_minutes,
-        "patient": [em.latitude, em.longitude],
+        "patient": [em.latitude, em.longitude] if em.location_source != "none" else None,
+        "patient_location": location.status(em),
         "ambulance": a and {"plate": a.plate_number, "type": a.get_ambulance_type_display(),
                             "pos": [a.latitude, a.longitude], "status": a.get_status_display(),
                             "simulated": a.location_is_simulated,
@@ -302,3 +303,21 @@ def request_contact(request):
                                   "will contact you.")
         return redirect("request_contact")
     return render(request, "portal/request_contact.html", {"open_req": open_req})
+
+
+@login_required
+@require_POST
+def update_location(request, ref):
+    """The patient's browser sends its live GPS position for its own open emergency (watchPosition, throttled)."""
+    import json
+    em = get_object_or_404(EmergencyRequest, reference=ref, patient=request.user)
+    try:
+        d = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "invalid JSON"}, status=400)
+    try:
+        st, stored = location.update(em, request.user, d.get("latitude"), d.get("longitude"), d.get("accuracy"),
+                                     d.get("timestamp"), d.get("source", "gps"))
+    except location.LocationError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse({"location": st, "stored": stored})

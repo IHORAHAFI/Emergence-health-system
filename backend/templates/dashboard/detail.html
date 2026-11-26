@@ -65,6 +65,15 @@
   </div>
   <div class="col-lg-6">
     <div class="card p-2 mb-3"><div id="map" class="map-sm"></div>
+      <div class="px-2 pt-2" id="op-loc" role="status" aria-live="polite">
+        <div class="d-flex flex-wrap align-items-center gap-2"><b class="small">Patient location:</b> <span id="op-loc-badge"></span></div>
+        <div class="small text-muted" id="op-loc-detail"></div>
+        <div class="d-flex gap-2 mt-1">
+          <button type="button" class="btn btn-sm btn-outline-primary" id="op-zoom"><i class="bi bi-crosshair"></i> Zoom to patient</button>
+          <a class="btn btn-sm btn-outline-secondary" id="op-dir" target="_blank" rel="noopener"><i class="bi bi-sign-turn-right"></i> Directions</a>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="op-fit"><i class="bi bi-arrows-fullscreen"></i> Fit all</button>
+        </div>
+      </div>
       {% if em.assigned_ambulance %}<small class="text-muted px-2">Ambulance position: {% if em.assigned_ambulance.location_is_simulated %}SIMULATED{% else %}live crew GPS{% endif %}</small>{% endif %}</div>
     <div class="card mb-3"><div class="card-header">Timeline</div><ul class="list-group list-group-flush">
       {% for l in logs %}<li class="list-group-item small"><b>{{ l.status }}</b> - {{ l.note }} <span class="text-muted">{{ l.by.username|default:"system" }}</span><span class="text-muted float-end">{{ l.at|date:"H:i:s" }}</span></li>{% endfor %}
@@ -81,15 +90,43 @@
 {% endblock %}
 {% block scripts %}
 <script>
-const map = App.tiles(L.map('map').setView([{{ em.latitude }}, {{ em.longitude }}], 13));
-const pts = [[{{ em.latitude }}, {{ em.longitude }}]];
-L.marker(pts[0], {icon: App.icon('bi-person-fill', '#b42318')}).addTo(map).bindPopup('Patient');
-{% if em.assigned_ambulance %}const ap = [{{ em.assigned_ambulance.latitude }}, {{ em.assigned_ambulance.longitude }}]; pts.push(ap);
-L.marker(ap, {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map).bindPopup("{{ em.assigned_ambulance.plate_number|escapejs }}");
-L.polyline([ap, pts[0]], {color: '#e8590c', dashArray: '6'}).addTo(map);{% endif %}
-{% if em.assigned_hospital %}const hp = [{{ em.assigned_hospital.latitude }}, {{ em.assigned_hospital.longitude }}]; pts.push(hp);
-L.marker(hp, {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map).bindPopup("{{ em.assigned_hospital.name|escapejs }}");
-L.polyline([pts[0], hp], {color: '#1d4ed8'}).addTo(map);{% endif %}
-if (pts.length > 1) map.fitBounds(pts, {padding: [30, 30]});
+const map = App.tiles(L.map('map').setView([-1.9441, 30.0619], 12));  // initial view only - not a location
+const others = [];
+{% if em.assigned_ambulance %}const ap = [{{ em.assigned_ambulance.latitude }}, {{ em.assigned_ambulance.longitude }}]; others.push(ap);
+const ambM = L.marker(ap, {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map).bindPopup("{{ em.assigned_ambulance.plate_number|escapejs }}");{% endif %}
+{% if em.assigned_hospital %}const hp = [{{ em.assigned_hospital.latitude }}, {{ em.assigned_hospital.longitude }}]; others.push(hp);
+L.marker(hp, {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map).bindPopup("{{ em.assigned_hospital.name|escapejs }}");{% endif %}
+// Patient marker: from the server's location status, moved in place on every update (no new marker, no map reset)
+let patM = null, accC = null, line = null, patPos = null, first = true;
+function fitAll() { const pts = [patPos, ...others].filter(Boolean); if (pts.length > 1) map.fitBounds(pts, {padding: [30, 30]}); else if (pts.length) map.setView(pts[0], 15); }
+async function refreshLocation() {
+  const r = await fetch("{% url 'track_json' em.reference %}", {credentials: 'same-origin'});
+  if (!r.ok) return;
+  const d = await r.json(), s = d.patient_location, E = App.esc;
+  document.getElementById('op-loc-badge').innerHTML = App.locationBadge(s);
+  if (!s || s.latitude == null) {
+    patPos = null;
+    [patM, accC, line].forEach(x => x && map.removeLayer(x)); patM = accC = line = null;
+    document.getElementById('op-loc-detail').textContent = 'No position on the map: the patient has not shared a location.';
+    document.getElementById('op-dir').classList.add('disabled');
+  } else {
+    patPos = [s.latitude, s.longitude];
+    const icon = App.icon('bi-person-fill', App.locationColor(s));
+    if (!patM) patM = L.marker(patPos, {icon}).addTo(map);
+    patM.setLatLng(patPos).setIcon(icon).bindPopup(`<b>{{ em.patient_name|default:em.patient.get_full_name|default:em.patient.username|escapejs }}</b> · {{ em.reference }}<br>${E(s.label)}<br>`
+      + `${s.latitude.toFixed(5)}, ${s.longitude.toFixed(5)}${s.accuracy_m ? ' ±' + Math.round(s.accuracy_m) + ' m' : ''}<br>Updated ${new Date(s.updated_at).toLocaleTimeString()}`);
+    if (s.accuracy_m) { if (!accC) accC = L.circle(patPos, {radius: s.accuracy_m, weight: 1, fillOpacity: .08}).addTo(map); accC.setLatLng(patPos).setRadius(s.accuracy_m); }
+    {% if em.assigned_ambulance %}if (line) line.setLatLngs([ap, patPos]); else line = L.polyline([ap, patPos], {color: '#e8590c', dashArray: '6'}).addTo(map);{% endif %}
+    document.getElementById('op-loc-detail').textContent = `${s.latitude.toFixed(5)}, ${s.longitude.toFixed(5)}`
+      + (s.accuracy_m ? ` · accuracy ±${Math.round(s.accuracy_m)} m` : '') + ` · last update ${new Date(s.updated_at).toLocaleString()}`;
+    const dir = document.getElementById('op-dir');
+    dir.classList.remove('disabled');
+    dir.href = `https://www.openstreetmap.org/directions?to=${s.latitude},${s.longitude}#map=16/${s.latitude}/${s.longitude}`;
+  }
+  if (first) { fitAll(); first = false; }
+}
+document.getElementById('op-zoom').onclick = () => patPos && map.setView(patPos, 17);
+document.getElementById('op-fit').onclick = fitAll;
+App.live(refreshLocation, {interval: 10000, slowInterval: 20000});  // WebSocket nudges + polling fallback
 </script>
 {% endblock %}

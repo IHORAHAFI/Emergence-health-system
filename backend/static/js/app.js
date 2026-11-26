@@ -2,12 +2,27 @@
 window.App = {
   dark: document.documentElement.dataset.bsTheme === 'dark',
   tiles(map) {
-    // CARTO basemap (OpenStreetMap data). tile.openstreetmap.org returns 403 "Access blocked"
-    // here because Django's same-origin Referrer-Policy strips the Referer header OSM requires.
-    L.tileLayer(`https://{s}.basemaps.cartocdn.com/${App.dark ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}{r}.png`, {
-      maxZoom: 19, subdomains: 'abcd',
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    // OpenStreetMap standard tiles (free, no API key; tile usage policy: https://operations.osmfoundation.org/policies/tiles/).
+    // * referrerPolicy: OSM requires a Referer header; Django's same-origin Referrer-Policy strips it from cross-origin
+    //   requests (that gave HTTP 403 "Access blocked"), so the tile requests send the site origin explicitly.
+    // * CARTO basemaps were used before, but CARTO now returns "API KEY REQUIRED" placeholder tiles without a key.
+    // * Dark theme: OSM has no dark style, so the tiles are darkened with a CSS filter (class map-dark).
+    const layer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, referrerPolicy: 'strict-origin-when-cross-origin',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
+    if (App.dark) map.getContainer().classList.add('map-dark');
+    // a map that cannot load its tiles must say so instead of showing an empty grey box
+    let failed = 0, warned = false;
+    layer.on('tileerror', () => {
+      if (++failed < 4 || warned) return;
+      warned = true;
+      const note = L.control({position: 'bottomleft'});
+      note.onAdd = () => Object.assign(L.DomUtil.create('div', 'leaflet-bar'), {
+        style: 'background:#fff;color:#b42318;padding:4px 8px;font-size:12px;max-width:240px',
+        textContent: 'Map tiles could not be loaded (offline or blocked). Markers and coordinates are still correct.'});
+      note.addTo(map);
+    });
     return map;
   },
   icon(cls, color) {

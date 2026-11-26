@@ -23,6 +23,7 @@ urlpatterns = [
     path("emergencies/", web_views.emergencies_list, name="emergencies"),
     path("emergency/<int:pk>/", web_views.emergency_detail, name="emergency_detail"),
     path("emergency/<int:pk>/action/", web_views.emergency_action, name="emergency_action"),
+    path("live-locations.json", web_views.live_locations, name="live_locations"),
     path("ambulances/", web_views.ambulances_page, name="ambulances"),
     path("ambulances/<int:pk>/action/", web_views.ambulance_action, name="ambulance_action"),
     path("ambulances/new/", web_views.ambulance_edit, name="ambulance_new"),

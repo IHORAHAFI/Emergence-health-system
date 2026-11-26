@@ -92,7 +92,8 @@ class _ParamedicHomeScreenState extends State<ParamedicHomeScreen> {
               : Column(children: [
                   Expanded(
                     child: EmergencyMap(
-                      patient: LatLng(j.latitude, j.longitude),
+                      patient: j.latitude != null ? LatLng(j.latitude!, j.longitude!) : null,
+                      patientLabel: j.locationLabel,
                       ambulance: j.ambulanceLat != null ? LatLng(j.ambulanceLat!, j.ambulanceLng!) : null,
                       hospital: j.hospital != null ? LatLng(j.hospital!.latitude, j.hospital!.longitude) : null,
                     ),

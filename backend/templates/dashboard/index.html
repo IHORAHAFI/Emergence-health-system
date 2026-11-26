@@ -128,7 +128,8 @@
     <div class="small text-muted px-2 pt-2 d-flex flex-wrap gap-3">
       <span><span class="dot" style="color:#ef4444" aria-hidden="true"></span>Emergency</span><span><span class="dot" style="color:#6ea8ff" aria-hidden="true"></span>Hospital</span>
       {% if user.role != 'hospital' %}<span><span class="dot" style="color:#22c55e" aria-hidden="true"></span>Ambulance free</span><span><span class="dot" style="color:#f97316" aria-hidden="true"></span>Ambulance busy</span>{% endif %}
-      <span>Positions simulated unless live GPS</span></div>
+      <span><span class="dot" style="color:#d92d20" aria-hidden="true"></span>Live GPS</span><span><span class="dot" style="color:#f79009" aria-hidden="true"></span>Last known</span><span><span class="dot" style="color:#2e90fa" aria-hidden="true"></span>Manual</span>
+      <span>Ambulance positions simulated unless live crew GPS</span><span class="text-danger fw-semibold" id="loc-unavailable"></span></div>
   </section></div>
   <div class="col-lg-4"><section class="card h-100" aria-labelledby="act-title">
     <div class="card-header d-flex justify-content-between"><h2 class="h6 mb-0" id="act-title">Recent activity</h2>{% if user.role != 'hospital' %}<a class="small" href="{% url 'activity_log' %}">All</a>{% endif %}</div>
@@ -162,8 +163,31 @@ const map = App.tiles(L.map('map').setView([-1.9536, 30.0606], 12));
 {% endfor %}
 {% if user.role != 'hospital' %}{% for a in ambulances %}L.circleMarker([{{ a.latitude }}, {{ a.longitude }}], {radius: 6, color: '{% if a.status == "available" %}#22c55e{% elif a.status == "offline" %}#94a3b8{% else %}#f97316{% endif %}', fillOpacity: .9}).addTo(map).bindPopup("{{ a.plate_number|escapejs }} - {{ a.simple_status|escapejs }}{% if a.location_is_simulated %} (simulated position){% else %} (live GPS){% endif %}");
 {% endfor %}{% endif %}
-{% for e in active %}L.circleMarker([{{ e.latitude }}, {{ e.longitude }}], {radius: 9, color: '#ef4444', fillOpacity: .9}).addTo(map).bindPopup("<a href='{% url 'emergency_detail' e.id %}'>{{ e.reference }}</a> {{ e.get_emergency_type_display|escapejs }} ({{ e.priority }})");
-{% endfor %}
+// Active emergencies: markers keyed by emergency id, moved in place when new GPS arrives (no duplicates,
+// no map reset). Requests without a shared location are counted, never drawn at an invented position.
+const emMarkers = {};
+let fittedOnce = false;
+async function refreshEmergencyMarkers() {
+  const r = await fetch("{% url 'live_locations' %}", {credentials: 'same-origin'});
+  if (!r.ok) return;
+  const d = await r.json(), seen = new Set(), E = App.esc, pts = [];
+  let unavailable = 0;
+  for (const e of d.emergencies) {
+    const s = e.location;
+    if (s.latitude == null) { unavailable++; continue; }
+    seen.add(e.id);
+    const pos = [s.latitude, s.longitude]; pts.push(pos);
+    const html = `<a href="/dashboard/emergency/${e.id}/">${E(e.reference)}</a> · ${E(e.type)} (${E(e.priority)})<br>${E(e.patient)} · ${E(e.patient_code)}<br>`
+      + `${App.locationBadge(s)}<br>${pos[0].toFixed(5)}, ${pos[1].toFixed(5)} · ${E(e.status_display)}`;
+    const style = {radius: 9, color: App.locationColor(s), fillOpacity: s.state === 'live' ? .9 : .45, dashArray: s.state === 'last_known' ? '4' : null};
+    if (!emMarkers[e.id]) emMarkers[e.id] = L.circleMarker(pos, style).addTo(map).bindPopup(html);
+    else emMarkers[e.id].setLatLng(pos).setStyle(style).setPopupContent(html);
+  }
+  for (const id of Object.keys(emMarkers)) if (!seen.has(+id)) { map.removeLayer(emMarkers[id]); delete emMarkers[id]; }
+  document.getElementById('loc-unavailable').textContent = unavailable ? `${unavailable} emergency(ies) without a shared location - not on the map` : '';
+  if (!fittedOnce && pts.length) { map.fitBounds(pts, {padding: [40, 40], maxZoom: 14}); fittedOnce = true; }
+}
+App.live(refreshEmergencyMarkers, {interval: 10000, slowInterval: 20000});
 // Refresh the overview, but never while someone is reading or using the page (keyboard, screen reader, forms).
 let paused = false, lastUse = Date.now();
 ['keydown', 'pointerdown', 'focusin', 'scroll'].forEach(ev => addEventListener(ev, () => lastUse = Date.now(), {passive: true}));

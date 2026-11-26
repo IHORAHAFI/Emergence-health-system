@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/emergency.dart';
 import '../services/api_service.dart';
 import '../services/ble_service.dart';
+import '../services/location_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'ble_connect_screen.dart';
@@ -25,6 +27,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
   Timer? _timer;
   StreamSubscription<BleMeasurement>? _ble;
   String? _bleStatus;
+  StreamSubscription<Position>? _gps;
+  String? _gpsStatus;
+  bool _gpsError = false;
 
   @override
   void initState() {
@@ -36,13 +41,68 @@ class _TrackingScreenState extends State<TrackingScreen> {
   Future<void> _load() async {
     try {
       final e = await ApiService.instance.getEmergency(widget.emergencyId);
+      final firstLoad = _em == null;
       if (mounted) setState(() => _em = e);
-      if (!e.isActive) _timer?.cancel();
+      if (!e.isActive) {
+        _timer?.cancel();
+        _stopGps('The emergency has ended - location sharing stopped.');
+      } else if (firstLoad && e.raw['location_source'] == 'gps') {
+        _startGps(); // the patient chose GPS when sending the request: keep it live (visible, with Stop)
+      }
     } catch (_) {}
+  }
+
+  /// Live GPS while this screen is open and the emergency is active. Uses the phone's GPS with permission;
+  /// sends only after moving 20 m (LocationService.stream). Android/iOS stop it when the app is in the background.
+  Future<void> _startGps() async {
+    setState(() {
+      _gpsStatus = 'Finding your location…';
+      _gpsError = false;
+    });
+    try {
+      final first = await LocationService.current(); // asks permission, explains failures
+      await _send(first);
+      await _gps?.cancel();
+      _gps = LocationService.stream().listen(_send, onError: (e) => _gpsFail('$e'));
+    } catch (e) {
+      _gpsFail(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _send(Position p) async {
+    final em = _em;
+    if (em == null || !em.isActive) return;
+    try {
+      await ApiService.instance.shareLocation(em.id, p.latitude, p.longitude, accuracy: p.accuracy, at: p.timestamp);
+      if (mounted) {
+        setState(() {
+          _gpsStatus = 'Sharing live location (±${p.accuracy.round()} m)';
+          _gpsError = false;
+        });
+      }
+    } catch (e) {
+      _gpsFail('Location not sent: $e');
+    }
+  }
+
+  void _gpsFail(String why) {
+    if (mounted) {
+      setState(() {
+        _gpsStatus = why;
+        _gpsError = true;
+      });
+    }
+  }
+
+  void _stopGps([String? why]) {
+    _gps?.cancel();
+    _gps = null;
+    if (mounted && why != null) setState(() => _gpsStatus = why);
   }
 
   @override
   void dispose() {
+    _gps?.cancel();
     _timer?.cancel();
     _ble?.cancel();
     if (_ble != null) BleService.instance.disconnect();
@@ -120,7 +180,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
           : Column(children: [
               Expanded(
                 child: EmergencyMap(
-                  patient: LatLng(e.latitude, e.longitude),
+                  patient: e.latitude != null ? LatLng(e.latitude!, e.longitude!) : null,
+                  patientLabel: e.locationLabel,
                   ambulance: e.ambulanceLat != null ? LatLng(e.ambulanceLat!, e.ambulanceLng!) : null,
                   hospital: e.hospital != null ? LatLng(e.hospital!.latitude, e.hospital!.longitude) : null,
                 ),
@@ -134,6 +195,25 @@ class _TrackingScreenState extends State<TrackingScreen> {
                   ]),
                   const SizedBox(height: 8),
                   _steps(e.operatorLabel),
+                  if (e.isActive)
+                    Semantics(
+                      liveRegion: true,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(children: [
+                          Icon(_gps != null ? Icons.my_location : Icons.location_off,
+                              size: 18, color: _gpsError ? Colors.red : (_gps != null ? Colors.green : Colors.black45)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(_gpsStatus ?? '${e.locationLabel} - share your live location so the ambulance can find you.',
+                                style: TextStyle(fontSize: 13, color: _gpsError ? Colors.red : null)),
+                          ),
+                          _gps == null
+                              ? TextButton(onPressed: _startGps, child: const Text('Share'))
+                              : TextButton(onPressed: () => _stopGps('Location sharing stopped.'), child: const Text('Stop')),
+                        ]),
+                      ),
+                    ),
                   if (e.acceptedBy != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),

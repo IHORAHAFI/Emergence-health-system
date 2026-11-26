@@ -22,6 +22,7 @@
   const session = {
     get(k) { try { return sessionStorage.getItem(k) === '1'; } catch (e) { return false; } },
     set(k) { try { sessionStorage.setItem(k, '1'); } catch (e) { /* ignore */ } },
+    unset(k) { try { sessionStorage.removeItem(k); } catch (e) { /* ignore */ } },
   };
 
   // ---------------------------------------------------------------- sound
@@ -42,7 +43,7 @@
       render();
     });
   }
-  let muted = store.get('opMuted', false), alerts = [];
+  let muted = store.get('opMuted', false), alerts = [], collapsed = session.get('opAlarmCollapsed');
 
   function stopSiren() { if (siren) { siren.pause(); siren.currentTime = 0; } }
 
@@ -130,6 +131,7 @@
     #op-alarm .op-head .pulse{width:12px;height:12px;border-radius:50%;background:#fff;animation:opPulse 1s infinite}
     @keyframes opPulse{0%{opacity:1}50%{opacity:.2}100%{opacity:1}}
     #op-alarm .op-list{overflow-y:auto}
+    #op-alarm.collapsed .op-list{display:none}
     #op-alarm .op-item{padding:.6rem .8rem;border-top:1px solid #eaecf0}
     #op-alarm .op-item.newest{background:#fef3f2}
     #op-alarm .op-meta{font-size:.8rem;color:#475467}
@@ -198,6 +200,7 @@
   function render() {
     renderSound();
     panel.classList.toggle('d-none', !alerts.length);
+    panel.classList.toggle('collapsed', collapsed);
     if (!alerts.length) { panel.innerHTML = ''; return; }
     const newest = alerts[alerts.length - 1].key;
     const items = alerts.slice().reverse().map(a => `
@@ -223,13 +226,18 @@
       <div class="op-head">
         <span class="pulse" aria-hidden="true"></span>
         <b>NEW PATIENT REQUEST${alerts.length > 1 ? 'S' : ''}</b><span>${alerts.length} pending</span>
-        <button type="button" class="btn btn-sm btn-light ms-auto op-mute" aria-pressed="${muted}">
+        <button type="button" class="btn btn-sm btn-light ms-auto op-min" aria-expanded="${!collapsed}"
+          title="${collapsed ? 'Show the requests' : 'Minimise (the alert stays visible)'}"><i class="bi ${collapsed ? 'bi-chevron-up' : 'bi-chevron-down'}"></i></button>
+        <button type="button" class="btn btn-sm btn-light op-mute" aria-pressed="${muted}">
           <i class="bi ${muted ? 'bi-volume-mute-fill' : 'bi-volume-up-fill'}"></i> ${muted ? 'Unmute' : 'Mute'}</button>
       </div>
       <div class="op-list">${items}</div>`;
   }
 
   panel.addEventListener('click', async e => {
+    if (e.target.closest('.op-min')) {
+      collapsed = !collapsed; session[collapsed ? 'set' : 'unset']('opAlarmCollapsed'); return render();
+    }
     if (e.target.closest('.op-mute')) return setMuted(!muted);
     const btn = e.target.closest('.op-accept');
     if (!btn) return;
@@ -279,7 +287,11 @@
     const keys = new Set(list.map(a => a.key));
     const seen = new Set(store.get('opSeenAlerts', []));
     for (const a of list) {
-      if (!seen.has(a.key)) { seen.add(a.key); toast(`<b><i class="bi bi-exclamation-octagon-fill"></i> New request ${E(a.reference)}</b><br>${E(a.type)} · ${E(a.patient)}`, 'alert-danger'); }
+      if (!seen.has(a.key)) {
+        seen.add(a.key);
+        if (collapsed) { collapsed = false; session.unset('opAlarmCollapsed'); }  // a NEW request always reopens the panel
+        toast(`<b><i class="bi bi-exclamation-octagon-fill"></i> New request ${E(a.reference)}</b><br>${E(a.type)} · ${E(a.patient)}`, 'alert-danger');
+      }
     }
     store.set('opSeenAlerts', [...seen].filter(k => keys.has(k)).concat([...seen].filter(k => !keys.has(k)).slice(-100)));
     alerts = list;

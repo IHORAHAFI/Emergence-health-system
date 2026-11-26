@@ -18,6 +18,16 @@
       <div id="eta" class="mb-2"></div>
       <div id="amb" class="small"></div>
       <div id="hosp" class="small mt-1"></div>
+      <div class="border rounded p-2 mt-2" id="loc-box">
+        <div class="d-flex align-items-center gap-2 flex-wrap"><b class="small">{% if user.role == 'patient' %}My location{% else %}Patient location{% endif %}:</b> <span id="loc-badge"></span></div>
+        {% if user.role == 'patient' and em.is_active %}
+        <p class="small mb-1 mt-1" id="loc-why">Sharing your live GPS position helps the ambulance find you if you move. It is shared only with the
+          emergency team for this request, only while this page is open, and stops when the emergency ends.</p>
+        <div class="small fw-semibold" id="loc-share-status" role="status" aria-live="polite"></div>
+        <button type="button" class="btn btn-sm btn-primary mt-1" id="loc-start"><i class="bi bi-geo-alt-fill"></i> Share my live location</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary mt-1 d-none" id="loc-stop">Stop sharing</button>
+        {% endif %}
+      </div>
       {% if user.role == 'patient' and em.is_active %}<a class="btn btn-sm btn-outline-danger mt-2" href="{% url 'vitals_measure' em.reference %}"><i class="bi bi-activity"></i> Send my vital signs to the medical team</a>{% endif %}
       <div class="small text-muted mt-2">Updates automatically every 5 seconds. Call {{ hotline }} if your condition gets worse.</div>
     </div>
@@ -29,9 +39,18 @@
 {% endblock %}
 {% block scripts %}
 <script>
-const map = App.tiles(L.map('map').setView([{{ em.latitude }}, {{ em.longitude }}], 14));
-L.marker([{{ em.latitude }}, {{ em.longitude }}], {icon: App.icon('bi-person-fill', '#b42318')}).addTo(map).bindPopup('Patient location');
-let ambM = null, hospM = null, line = null, fitted = false;
+const map = App.tiles(L.map('map').setView([-1.9441, 30.0619], 12));  // initial view only - not a location
+let patM = null, accC = null, ambM = null, hospM = null, line = null, fitted = false;
+// patient marker from the server's location STATUS (never drawn when the location is unavailable)
+function showPatient(s) {
+  document.getElementById('loc-badge').innerHTML = App.locationBadge(s);
+  if (!s || s.latitude == null) { if (patM) { map.removeLayer(patM); patM = null; } if (accC) { map.removeLayer(accC); accC = null; } return null; }
+  const pos = [s.latitude, s.longitude];
+  if (!patM) patM = L.marker(pos, {icon: App.icon('bi-person-fill', App.locationColor(s))}).addTo(map);
+  patM.setLatLng(pos).setIcon(App.icon('bi-person-fill', App.locationColor(s))).bindPopup(`${App.esc(s.label)}<br>${pos[0].toFixed(5)}, ${pos[1].toFixed(5)}`);
+  if (s.accuracy_m) { if (!accC) accC = L.circle(pos, {radius: s.accuracy_m, weight: 1, fillOpacity: .08}).addTo(map); accC.setLatLng(pos).setRadius(s.accuracy_m); }
+  return pos;
+}
 async function refresh() {
   const r = await fetch("{% url 'track_json' em.reference %}", {credentials: 'same-origin'});
   if (!r.ok) return;
@@ -44,15 +63,16 @@ async function refresh() {
     : '<span class="text-warning"><i class="bi bi-hourglass-split"></i> Waiting for an available ambulance. Operators have been alerted.</span>';
   document.getElementById('hosp').innerHTML = d.hospital ? `<i class="bi bi-hospital"></i> Destination: <b>${E(d.hospital.name)}</b>` : '';
   document.getElementById('sim-note').innerText = d.ambulance && d.ambulance.simulated ? 'Ambulance position is SIMULATED for this demonstration - not real GPS.' : (d.ambulance ? 'Ambulance position from crew device GPS.' : '');
+  const patient = showPatient(d.patient_location);
   if (d.ambulance) {
     if (!ambM) ambM = L.marker(d.ambulance.pos, {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map);
     ambM.setLatLng(d.ambulance.pos);
-    if (line) map.removeLayer(line);
-    line = L.polyline([d.ambulance.pos, d.patient], {color: '#e8590c', dashArray: '6'}).addTo(map);
+    if (line) { map.removeLayer(line); line = null; }
+    if (patient) line = L.polyline([d.ambulance.pos, patient], {color: '#e8590c', dashArray: '6'}).addTo(map);
   }
   if (d.hospital && !hospM) hospM = L.marker(d.hospital.pos, {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map).bindPopup(E(d.hospital.name));
-  if (!fitted) { const pts = [d.patient]; if (d.ambulance) pts.push(d.ambulance.pos); if (d.hospital) pts.push(d.hospital.pos);
-    if (pts.length > 1) map.fitBounds(pts, {padding: [40, 40]}); fitted = true; }
+  if (!fitted) { const pts = [patient, d.ambulance && d.ambulance.pos, d.hospital && d.hospital.pos].filter(Boolean);
+    if (pts.length > 1) map.fitBounds(pts, {padding: [40, 40]}); else if (pts.length) map.setView(pts[0], 15); fitted = true; }
   document.getElementById('recs').innerHTML = (d.recommendations || []).map(h =>
     `<li class="list-group-item small"><b>${E(h.name)}</b> · ${h.distance_km} km<br><span class="text-muted">${(h.reasons || []).map(E).join(' · ')}</span></li>`).join('')
     || '<li class="list-group-item small text-muted">No recommendation available (AI unavailable or no hospital in range). Responders will choose.</li>';
@@ -60,5 +80,25 @@ async function refresh() {
     `<li class="mb-2"><b>${E(l.status)}</b> <span class="text-muted small">${new Date(l.at).toLocaleTimeString()}</span><br><span class="small">${E(l.note)}</span></li>`).join('');
 }
 refresh(); setInterval(refresh, 5000);
+{% if user.role == 'patient' and em.is_active %}
+// Live GPS sharing (patient's own device, own emergency, only while this page is open)
+let sharing = null;
+const startBtn = document.getElementById('loc-start'), stopBtn = document.getElementById('loc-stop'),
+      shareStatus = document.getElementById('loc-share-status');
+function startSharing() {
+  sharing = App.shareLocation({url: "{% url 'update_location' em.reference %}",
+    onStatus: (kind, text) => {
+      shareStatus.className = 'small fw-semibold ' + ({live: 'text-success', denied: 'text-danger', error: 'text-danger', offline: 'text-warning'}[kind] || 'text-muted');
+      shareStatus.textContent = text;
+      if (kind === 'denied' || kind === 'stopped') { startBtn.classList.remove('d-none'); stopBtn.classList.add('d-none'); }
+    },
+    onPosition: s => showPatient(s)});
+  startBtn.classList.add('d-none'); stopBtn.classList.remove('d-none');
+}
+startBtn.onclick = startSharing;
+stopBtn.onclick = () => { sharing && sharing.stop(); sharing = null; };
+// the patient already chose GPS when sending the request: continue sharing automatically (visible, with Stop)
+{% if em.location_source == 'gps' %}startSharing();{% endif %}
+{% endif %}
 </script>
 {% endblock %}

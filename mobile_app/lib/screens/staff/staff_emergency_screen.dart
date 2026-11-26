@@ -192,7 +192,8 @@ class _StaffEmergencyScreenState extends State<StaffEmergencyScreen> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: EmergencyMap(
-            patient: LatLng(e.latitude, e.longitude),
+            patient: e.latitude != null ? LatLng(e.latitude!, e.longitude!) : null,
+            patientLabel: e.locationLabel,
             ambulance: e.ambulanceLat != null ? LatLng(e.ambulanceLat!, e.ambulanceLng!) : null,
             hospital: e.hospital != null ? LatLng(e.hospital!.latitude, e.hospital!.longitude) : null,
           ),
@@ -203,7 +204,10 @@ class _StaffEmergencyScreenState extends State<StaffEmergencyScreen> {
         child: Text([
           if (e.ambulancePlate != null) 'Ambulance ${e.ambulancePlate}${e.etaMinutes != null ? ' · ETA ~${e.etaMinutes!.toStringAsFixed(0)} min' : ''}',
           if (e.hospital != null) 'Hospital: ${e.hospital!.name}',
-          'Location: ${r['location_source'] ?? 'gps'}${r['location_consent'] == true ? ' (shared with consent)' : ''}',
+          '${e.locationLabel}'
+              '${e.location['accuracy_m'] != null ? ' · ±${(e.location['accuracy_m'] as num).round()} m' : ''}'
+              '${e.location['updated_at'] != null ? ' · updated ${ago(DateTime.parse(e.location['updated_at']).toLocal())}' : ''}'
+              '${(e.location['note'] ?? '').toString().isNotEmpty ? ' · ${e.location['note']}' : ''}',
         ].join('\n'), style: const TextStyle(fontSize: 13, color: Colors.black54)),
       ),
       const SectionTitle('Vital signs'),

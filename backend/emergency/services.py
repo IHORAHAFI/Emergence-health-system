@@ -181,9 +181,18 @@ def create_emergency(patient, data, allow_duplicate=False, auto_dispatch=True):
             raise DuplicateEmergency(existing)
     if not data.get("contact_phone"):
         data["contact_phone"] = patient.phone
+    # the model's default is True (demo data); a request from a real patient is NOT simulated unless the caller
+    # (the demo simulators) says so explicitly
+    data.setdefault("is_simulated", False)
     em = EmergencyRequest(patient=patient, **data)
+    em.location_updated_at = timezone.now()
     triage(em)
     em.save()
+    if em.location_source in ("gps", "manual"):
+        from .models import EmergencyLocation
+        EmergencyLocation.objects.create(emergency=em, latitude=em.latitude, longitude=em.longitude,
+                                         accuracy_m=em.location_accuracy_m, source=em.location_source,
+                                         recorded_at=em.location_updated_at, submitted_by=patient)
     note = (f"Created. AI priority={em.priority} (confidence {em.ai_confidence})"
             if em.triage_method == "ml_model" else f"Created. AI unavailable - rule-based priority={em.priority}")
     log_status(em, note, patient)

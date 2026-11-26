@@ -43,6 +43,7 @@ urlpatterns = [
     path("patient/request-contact/", portal.request_contact, name="request_contact"),
     path("emergency/<str:ref>/track/", portal.track, name="track"),
     path("emergency/<str:ref>/track.json", portal.track_json, name="track_json"),
+    path("emergency/<str:ref>/location/", portal.update_location, name="update_location"),
     path("emergency/<str:ref>/cancel/", portal.cancel_emergency, name="cancel_emergency"),
     path("hospitals/", portal.hospitals_page, name="hospitals"),
     path("hospitals/nearby.json", portal.hospitals_json, name="hospitals_json"),

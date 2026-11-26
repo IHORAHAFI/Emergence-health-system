@@ -230,6 +230,13 @@ class ApiService {
   Future<Emergency> updateEmergencyStatus(int id, String status, {String note = ''}) async =>
       Emergency.fromJson(await post('/emergencies/$id/status/', {'status': status, 'note': note}));
   Future<void> sendEmergencyMessage(int id, String text) => post('/emergencies/$id/message/', {'text': text});
+
+  /// Live GPS from the patient's phone for their own open emergency (server validates and throttles).
+  Future<Map<String, dynamic>> shareLocation(int id, double lat, double lng, {double? accuracy, DateTime? at}) async =>
+      Map<String, dynamic>.from(await post('/emergencies/$id/location/', {
+        'latitude': lat, 'longitude': lng, if (accuracy != null) 'accuracy': accuracy,
+        'timestamp': (at ?? DateTime.now()).toUtc().toIso8601String(), 'source': 'gps',
+      }));
   Future<List<VitalReading>> emergencyVitals(String ref) async =>
       ((await get('/monitoring/$ref/readings/')) as List).map((e) => VitalReading.fromJson(e)).toList();
   Future<List<Map<String, dynamic>>> staffTests({bool openOnly = true}) async =>

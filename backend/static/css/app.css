@@ -68,6 +68,9 @@ a.stat-link:hover .card { border-color: #bcd3f5; }
 /* maps */
 .map { height: 420px; border-radius: 10px; z-index: 0; }
 .map-sm { height: 320px; border-radius: 10px; z-index: 0; }
+/* OpenStreetMap has no dark style: darken only the tile images (markers and popups keep their colours) */
+.map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.95) contrast(.9); }
+.map-dark .leaflet-container, .map-dark { background: #1b1f24; }
 
 /* priority / risk / status badges */
 .badge { font-weight: 600; letter-spacing: .01em; font-size: .8rem; }
