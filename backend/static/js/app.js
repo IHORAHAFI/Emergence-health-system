@@ -103,3 +103,26 @@ App.spark = function (canvas, values, color) {
 document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('canvas[data-spark]').forEach(cv => {
   try { App.spark(cv, JSON.parse(cv.dataset.spark), cv.dataset.color); } catch (e) { /* bad data: leave empty */ }
 }));
+
+// Refresh the parts of a page marked data-refresh (matched by id) IN PLACE instead of location.reload().
+// Why: browsers grant permission to play sound per page load. A full reload threw away the operator's
+// "Enable emergency sound" permission and cut off a siren that was playing - the siren then looked "broken".
+App.refresh = async function () {
+  const regions = document.querySelectorAll('[data-refresh]');
+  if (!regions.length) return false;
+  let r;
+  try { r = await fetch(location.href, {credentials: 'same-origin', cache: 'no-store'}); } catch (e) { return false; }
+  if (!r.ok || r.redirected) return false;  // e.g. logged out: leave the page as it is
+  const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+  const active = document.activeElement;
+  regions.forEach(el => {
+    if (active && el.contains(active) && active.closest('form')) return;  // never wipe a form being filled in
+    const fresh = doc.getElementById(el.id);
+    if (fresh) el.innerHTML = fresh.innerHTML;
+    el.querySelectorAll('canvas[data-spark]').forEach(cv => {
+      try { App.spark(cv, JSON.parse(cv.dataset.spark), cv.dataset.color); } catch (e) { /* leave empty */ }
+    });
+  });
+  document.dispatchEvent(new CustomEvent('app:refreshed'));
+  return true;
+};

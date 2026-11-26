@@ -44,7 +44,13 @@ class SirenService {
     }
     // at most 3 sirens per request (the server stops counting at 3; this guards older servers too)
     int count(Map a) => ((a['alert_count'] ?? 1) as int).clamp(1, 3);
-    final due = alerts.where((a) => count(a) > (played[a['key']] ?? 0)).toList();
+    // ring only for an alert that happened just now: finished schedules (AI took over long ago) stay silent after a
+    // fresh login; alert 3 and the takeover happen together, so a just-fired alert 3 still rings
+    bool fresh(Map a) {
+      final t = DateTime.tryParse('${a['last_alert_at'] ?? ''}');
+      return t == null || DateTime.now().difference(t).inSeconds < 60;
+    }
+    final due = alerts.where((a) => (fresh(a) || a['ai_takeover'] != true) && count(a) > (played[a['key']] ?? 0)).toList();
     if (due.isEmpty) return false;
     for (final a in due) {
       await p.setInt('siren_played_${a['key']}', count(a));

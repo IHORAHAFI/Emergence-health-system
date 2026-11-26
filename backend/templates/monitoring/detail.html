@@ -10,7 +10,7 @@
 </div>
 <div class="row g-3 mt-1">
   <div class="col-lg-7">
-    <div class="card p-3 mb-3" id="latest">
+    <div class="card p-3 mb-3" id="latest" data-refresh>
       {% if latest %}
       <div class="d-flex justify-content-between"><h2 class="h5 mb-1">Latest reading</h2>
         <span class="small text-muted">{{ latest.measured_at|date:"H:i:s" }} · {{ latest.get_source_display }}{% if latest.device %} · {{ latest.device }}{% endif %}</span></div>
@@ -27,7 +27,7 @@
       {% else %}<p class="text-muted mb-0">No vital signs received yet{% if not consent %} - the patient has not given consent to share measurements{% endif %}.</p>{% endif %}
       <p class="small text-muted mt-2 mb-0">Decision support (NEWS2, Royal College of Physicians). Not a diagnosis - confirm or override below.</p>
     </div>
-    <div class="card"><div class="card-header">History</div><div class="table-responsive"><table class="table table-sm align-middle mb-0" id="hist">
+    <div class="card" id="hist-card" data-refresh><div class="card-header">History</div><div class="table-responsive"><table class="table table-sm align-middle mb-0" id="hist">
       <tr><th>Measured</th><th>Source</th><th>Temp</th><th>HR</th><th>SpO₂</th><th>BP</th><th>RR</th><th>ECG</th><th>NEWS2</th><th>Review</th></tr>
       {% for r in readings %}<tr class="small">
         <td>{{ r.measured_at|date:"H:i:s" }}</td><td>{{ r.source }}{% if r.device %}<br><span class="text-muted">{{ r.device.name }}</span>{% endif %}</td>
@@ -65,17 +65,20 @@ L.marker(pts[1], {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map).
 {% if em.assigned_hospital %}pts.push([{{ em.assigned_hospital.latitude }}, {{ em.assigned_hospital.longitude }}]);
 L.marker(pts[pts.length - 1], {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map);{% endif %}
 if (pts.length > 1) map.fitBounds(pts, {padding: [30, 30]});
-document.querySelectorAll('form.review').forEach(f => f.onsubmit = async e => {
+// delegated: review forms inside refreshed regions keep working
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('form.review');
+  if (!f) return;
   e.preventDefault();
   const body = Object.fromEntries(new FormData(f));
   const r = await fetch(`/api/monitoring/readings/${f.dataset.id}/review/`, {method: 'POST', credentials: 'same-origin',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': App.csrf()}, body: JSON.stringify(body)});
-  if (r.ok) location.reload(); else alert((await r.json()).detail || 'Could not save review');
+  if (r.ok) App.refresh(); else alert((await r.json()).detail || 'Could not save review');
 });
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/vitals/{{ em.reference }}/');
   ws.onopen = () => document.getElementById('live').innerHTML = '<span class="badge bg-success">live</span>';
-  ws.onmessage = () => location.reload();
+  ws.onmessage = () => App.refresh();
   ws.onclose = () => { document.getElementById('live').innerHTML = '<span class="badge bg-warning text-dark">offline - retrying</span>'; setTimeout(connect, 5000); };
 }
 connect();

@@ -2,7 +2,7 @@
 //
 // * The SERVER is the source of truth (operator_feed -> "alerts"): every unhandled patient service request
 //   (emergency, medical test, request for a professional, symptom / caregiver report - from web or mobile),
-//   each with its OWN alert_count (1 on arrival, 2 and 3 every ALERT_INTERVAL) and AI-takeover state.
+//   each with its OWN alert_count (1 at 00:00, 2 at 02:00, 3 at 04:00) and AI takeover right after alert 3.
 //   Refreshing, reconnecting or opening a second tab cannot create, replay or lose an alert.
 // * Siren: the verified Police Wail file (emergency/siren.py). The page plays the WHOLE file once each time a
 //   request's alert_count goes up (max 3 per request) - never continuously.
@@ -66,7 +66,11 @@
 
   function owed() {  // requests whose latest server-side alert has not been played yet (max 3 each)
     const played = store.get('opPlayed', {});
-    return alerts.filter(a => Math.min(a.alert_count || 1, 3) > (played[a.key] || 0));
+    // only ring for an alert that happened just now: a request whose alerts are long over (e.g. AI already took
+    // over) does not ring again when a dashboard is opened later - it stays visible in red until accepted.
+    // Alert 3 and the AI takeover happen together, so a just-fired alert 3 still rings.
+    const fresh = a => !a.last_alert_at || Date.now() - new Date(a.last_alert_at) < 60000;
+    return alerts.filter(a => (fresh(a) || !a.ai_takeover) && Math.min(a.alert_count || 1, 3) > (played[a.key] || 0));
   }
   function markPlayed(list, delta = 0) {
     const played = store.get('opPlayed', {}), live = new Set(alerts.map(a => a.key));
@@ -148,7 +152,8 @@
   function stageLine(a) {
     const n = Math.min(a.alert_count || 1, 3);
     if (a.ai_takeover) return '<b>AI TAKEOVER</b> - patient answered by the assistant; waiting for a human';
-    if (a.stage === 'takeover_due') return `Alert 3 of 3 · AI takeover in <span class="op-next" data-at="${E(a.takeover_at)}">${countdown(a.takeover_at)}</span>`;
+    if (a.stage === 'takeover_due') return 'Alert 3 of 3 · <b>AI takeover starting</b>';
+    if (a.takeover_at) return `Alert ${n} of 3 · alert 3 + AI takeover in <span class="op-next" data-at="${E(a.takeover_at)}">${countdown(a.takeover_at)}</span>`;
     return `Alert ${n} of 3` + (a.next_alert_at ? ` · next in <span class="op-next" data-at="${E(a.next_alert_at)}">${countdown(a.next_alert_at)}</span>` : '');
   }
 
@@ -211,7 +216,7 @@
         <div class="op-meta">Patient: ${E(a.patient)} · ${E(a.patient_code)} · ${E(a.reference)}${a.status !== 'pending' ? ' · ' + E(a.status_detail) : ''}</div>
         <div class="d-flex gap-2 mt-2">
           <button type="button" class="btn btn-danger btn-sm op-accept" data-key="${E(a.key)}"><i class="bi bi-check2-circle"></i> Accept / handle</button>
-          <a class="btn btn-outline-secondary btn-sm" href="${E(a.url)}"><i class="bi bi-eye"></i> View details</a>
+          <a class="btn btn-outline-dark btn-sm" style="color:#1d2939;border-color:#1d2939" href="${E(a.url)}"><i class="bi bi-eye"></i> View details</a>
         </div>
       </div>`).join('');
     panel.innerHTML = `

@@ -28,7 +28,7 @@
 {% endif %}
 
 {# ---------------- KPIs ---------------- #}
-<div class="row g-3 mb-3">
+<div class="row g-3 mb-3" id="dash-kpis" data-refresh>
   <div class="col-6 col-xl-3"><a class="kpi-link" href="{% url 'emergencies' %}"><div class="card kpi">
     <div class="kpi-top"><span class="kpi-label">Active emergencies</span><span class="kpi-chip red" aria-hidden="true"><i class="bi bi-broadcast"></i></span></div>
     <div class="kpi-value">{{ stats.active }}</div>
@@ -81,7 +81,7 @@
 </div>
 
 {# ---------------- queues ---------------- #}
-<div class="row g-3 mb-3">
+<div class="row g-3 mb-3" id="dash-queues" data-refresh>
   <div class="{% if show_tests %}col-xl-7{% else %}col-12{% endif %}"><section class="card h-100" aria-labelledby="q-title">
     <div class="card-header d-flex justify-content-between align-items-center"><h2 class="h6 mb-0" id="q-title"><i class="bi bi-exclamation-triangle-fill text-danger" aria-hidden="true"></i> Priority queue</h2><a class="small" href="{% url 'emergencies' %}">All</a></div>
     <div class="table-responsive"><table class="table table-hover align-middle mb-0 queue">
@@ -132,7 +132,7 @@
   </section></div>
   <div class="col-lg-4"><section class="card h-100" aria-labelledby="act-title">
     <div class="card-header d-flex justify-content-between"><h2 class="h6 mb-0" id="act-title">Recent activity</h2>{% if user.role != 'hospital' %}<a class="small" href="{% url 'activity_log' %}">All</a>{% endif %}</div>
-    <div class="card-body"><ul class="timeline mb-0">
+    <div class="card-body" id="dash-activity" data-refresh><ul class="timeline mb-0">
       {% for l in activity|slice:":7" %}<li class="small"><a href="{% url 'emergency_detail' l.emergency_id %}" class="fw-semibold">{{ l.emergency.reference }}</a> · {{ l.status }}<br><span class="text-muted">{{ l.at|timesince }}{% if l.by %} · {{ l.by.username }}{% endif %}</span></li>
       {% empty %}<li class="small text-muted">No activity yet.</li>{% endfor %}
     </ul></div></section></div>
@@ -173,7 +173,7 @@ document.getElementById('refresh-toggle').onclick = e => {
 };
 setInterval(() => {
   const busy = Date.now() - lastUse < 20000 || document.querySelector('.modal.show') || document.activeElement.closest('form');
-  if (!paused && !busy) location.reload();
+  if (!paused && !busy) App.refresh();  // in place: keeps the siren's sound permission
 }, 30000);
 </script>
 {% endblock %}

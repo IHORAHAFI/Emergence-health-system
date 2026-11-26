@@ -229,6 +229,8 @@ def accept_emergency(em, operator):
     if updated:
         log_status(em, f"Accepted by operator {operator.get_full_name() or operator.username}", operator)
         nudge_operators(em)
+        from . import alert_workflow
+        alert_workflow.cancelled(em, operator)  # audit: remaining alerts + AI takeover cancelled
     return em
 
 

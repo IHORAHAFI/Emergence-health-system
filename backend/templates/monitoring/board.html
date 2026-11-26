@@ -8,7 +8,7 @@
 </div>
 <p class="small text-muted">Sorted by NEWS2 risk. NEWS2 is decision support for professional review - it is not a diagnosis. Home-device readings are often incomplete (partial score).</p>
 <div id="toast"></div>
-<div class="card"><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+<div class="card" id="board-list" data-refresh><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
   <tr><th>Emergency</th><th>Patient</th><th>Latest vitals</th><th>Measured</th><th>NEWS2</th><th>Risk</th><th>Hospital</th><th>Ambulance</th></tr>
   {% for em, r in rows %}
   <tr class="clickable" onclick="location='{% url 'vitals_detail' em.reference %}'" id="row-{{ em.reference }}">
@@ -35,7 +35,7 @@ function connect() {
     const bad = (r.alerts || []).filter(a => a.severity === 'red' || a.severity === 'amber');
     if (bad.length) document.getElementById('toast').insertAdjacentHTML('afterbegin',
       `<div class="alert alert-danger alert-dismissible small"><b>${App.esc(d.emergency)}</b>: ${bad.map(a => App.esc(a.explanation)).join('; ')}<button class="btn-close" data-bs-dismiss="alert"></button></div>`);
-    if (!row) return location.reload();
+    if (!row) return App.refresh();
     row.querySelector('.vit').innerText = [r.temperature_c != null && `${r.temperature_c}°C`, r.heart_rate_bpm && `HR ${r.heart_rate_bpm}`,
       r.spo2_pct && `SpO₂ ${r.spo2_pct}%`, r.systolic_mmhg && `BP ${r.systolic_mmhg}/${r.diastolic_mmhg}`].filter(Boolean).join(' · ') + (r.simulated ? ' (SIMULATED)' : ' (REAL)');
     row.querySelector('.when').innerText = 'just now';
@@ -45,7 +45,7 @@ function connect() {
   };
   ws.onclose = () => {
     document.getElementById('live').innerHTML = '<span class="badge bg-warning text-dark">offline - refreshing every 15 s</span>';
-    clearInterval(fallback); fallback = setInterval(() => location.reload(), 15000);
+    clearInterval(fallback); fallback = setInterval(() => App.refresh(), 15000);
     setTimeout(connect, 5000);
   };
 }

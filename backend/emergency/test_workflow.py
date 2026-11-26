@@ -69,12 +69,16 @@ class TimelineTests(Base):
         self.assertEqual((a["alert_count"], a["stage"], a["patient"]), (1, "alerting", "Jean Uwase"))
         self.assertTrue(a["next_alert_at"])
         self.assertEqual(self.run_to(ev, I - 1).alert_count, 1)               # not before 2 minutes
-        self.assertEqual(self.run_to(ev, I).alert_count, 2)                   # alert 2
-        ev = self.run_to(ev, 2 * I)
-        self.assertEqual((ev.alert_count, ev.ai_takeover_at), (3, None))      # alert 3, no takeover yet
-        self.assertEqual(self.run_to(ev, 2 * I + 60).ai_takeover_at, None)    # still waiting
-        ev = self.run_to(ev, 3 * I)                                           # +2 more minutes -> AI takeover
-        self.assertIsNotNone(ev.ai_takeover_at)
+        self.assertEqual(self.notes(self.a, "Your request has been received"), 1)
+        ev = self.run_to(ev, I)
+        self.assertEqual((ev.alert_count, ev.ai_takeover_at), (2, None))      # alert 2 at 02:00
+        self.assertEqual(self.notes(self.a, "Your request is waiting for assistance"), 1)
+        a = next(x for x in self.feed()["alerts"] if x["key"] == f"service-{ev.pk}")
+        self.assertTrue(a["takeover_at"])                                     # next step: alert 3 + takeover
+        self.assertEqual(self.run_to(ev, 2 * I - 1).alert_count, 2)           # not before 04:00
+        ev = self.run_to(ev, 2 * I)                                           # 04:00: alert 3 + AI takeover
+        self.assertEqual(ev.alert_count, 3)
+        self.assertIsNotNone(ev.ai_takeover_at)                               # immediately, no extra wait
         self.assertEqual(ev.status, "ai_responded")                          # NOT completed
         self.assertIsNone(ev.accepted_at)
         self.assertEqual(self.notes(self.a, "Update from your assistant"), 1)  # correct patient answered
@@ -82,7 +86,7 @@ class TimelineTests(Base):
         self.assertEqual(self.notes(self.op, "AI TAKEOVER"), 1)               # operator told
         a = next(x for x in self.feed()["alerts"] if x["key"] == f"service-{ev.pk}")
         self.assertEqual(a["stage"], "ai_takeover")                          # still visible, waiting for a human
-        self.run_to(ev, 4 * I, 5 * I)                                         # no 4th alert, no 2nd takeover
+        self.run_to(ev, 3 * I, 5 * I)                                         # no 4th alert, no 2nd takeover
         ev.refresh_from_db()
         self.assertEqual(ev.alert_count, 3)
         self.assertEqual(self.notes(self.op, "AI TAKEOVER"), 1)
@@ -95,23 +99,66 @@ class TimelineTests(Base):
         self.assertNotIn(f"service-{ev.pk}", self.keys())
         self.assertEqual(self.notes(self.a, "A staff member is handling your request"), 1)
 
-    def test_accept_before_alert_3_cancels_takeover(self):
+    def test_accept_between_alert_2_and_3_cancels_alert_3_and_takeover(self):
         ev = self.contact(self.a)
         self.run_to(ev, I)
         tr.accept_alert(f"service-{ev.pk}", self.op)
         ev = self.run_to(ev, 2 * I, 3 * I, 4 * I)
         self.assertEqual((ev.alert_count, ev.ai_takeover_at), (2, None))
+        from patient_monitoring.models import AccessAuditLog
+        self.assertTrue(AccessAuditLog.objects.filter(action="alert_schedule_cancelled",
+                                                      detail__contains="AI takeover cancelled").exists())
 
-    def test_accept_after_alert_3_before_takeover(self):
+    def test_accept_just_before_takeover(self):
+        ev = self.contact(self.a)
+        self.run_to(ev, I, 2 * I - 1)                          # one second before 04:00
+        tr.accept_alert(f"service-{ev.pk}", self.op)
+        ev = self.run_to(ev, 2 * I, 3 * I)
+        self.assertEqual((ev.alert_count, ev.ai_takeover_at), (2, None))
+
+    def test_viewing_only_keeps_the_schedule(self):
+        ev = self.contact(self.a)
+        self.client.force_login(self.op)
+        self.client.get(reverse("service_request_detail", args=[ev.pk]))  # operator only looks at it
+        self.feed()
+        ev = self.run_to(ev, I, 2 * I)
+        self.assertEqual(ev.alert_count, 3)
+        self.assertIsNotNone(ev.ai_takeover_at)
+
+    def test_duplicate_start_event(self):
+        ev = self.contact(self.a)
+        self.assertFalse(wf.start(ev))                          # repeated "new request" event: ignored
+        self.assertEqual(self.notes(self.a, "Your request has been received"), 1)
+
+    def test_audit_trail(self):
+        from patient_monitoring.models import AccessAuditLog
         ev = self.contact(self.a)
         self.run_to(ev, I, 2 * I)
-        tr.accept_alert(f"service-{ev.pk}", self.op)
-        ev = self.run_to(ev, 3 * I, 4 * I)
-        self.assertEqual((ev.alert_count, ev.ai_takeover_at), (3, None))
+        actions = set(AccessAuditLog.objects.values_list("action", flat=True))
+        self.assertTrue({"operator_alert_1", "operator_alert_2", "operator_alert_3", "ai_takeover"} <= actions)
+
+    def test_ai_failure_escalates_to_humans(self):
+        from unittest import mock
+        ev = self.contact(self.a)
+        self.run_to(ev, I)
+        with mock.patch("emergency.ai_takeover.take_over_service", side_effect=RuntimeError("model down")):
+            ev = self.run_to(ev, 2 * I)
+        self.assertEqual(self.notes(self.op, "AI TAKEOVER FAILED"), 1)
+        self.assertIn(f"service-{ev.pk}", self.keys())          # still visible for a human
+
+    def test_web_contact_request_uses_same_workflow(self):
+        self.client.force_login(self.a)
+        self.client.post(reverse("request_contact"), {"reason": "Advice about my blood pressure tablets"})
+        ev = MonitoringEvent.objects.get(patient=self.a, kind="contact_request")
+        self.assertEqual(ev.alert_count, 1)
+        self.client.post(reverse("request_contact"), {"reason": "again"})   # double submit: no 2nd request
+        self.assertEqual(MonitoringEvent.objects.filter(patient=self.a, kind="contact_request").count(), 1)
+        self.assertIn(f"service-{ev.pk}", self.keys())
 
     def test_independent_timers(self):
         a = self.contact(self.a)
         b = self.contact(self.b)
+        a.refresh_from_db()
         MonitoringEvent.objects.filter(pk=b.pk).update(last_alert_at=a.last_alert_at + timedelta(seconds=60))
         t0 = a.last_alert_at
         wf.tick(t0 + timedelta(seconds=I))               # A due, B not yet
@@ -139,7 +186,7 @@ class TimelineTests(Base):
 
     def test_concurrent_ticks_one_takeover(self):
         ev = self.contact(self.a)
-        self.run_to(ev, I, 2 * I)
+        self.run_to(ev, I)
         t = self.at(ev, I)
         wf.tick(t)
         wf.tick(t)                                          # second operator / process at the same moment
@@ -172,7 +219,7 @@ class TestRequestTakeoverTests(Base):
 
     def test_takeover_starts_simulation_labelled_simulated(self):
         req = self.req()
-        req = self.run_to(req, I, 2 * I, 3 * I)
+        req = self.run_to(req, I, 2 * I)
         self.assertEqual((req.status, req.ai_response["action"]), ("testing", "started_simulation"))
         self.assertIsNone(req.assigned_operator)              # the AI did not "accept" it
         self.assertEqual(SimulationSession.objects.filter(test_request=req).count(), 1)
@@ -202,9 +249,9 @@ class TestRequestTakeoverTests(Base):
 
     def test_accept_before_takeover_stops_it(self):
         req = self.req()
-        self.run_to(req, I, 2 * I)
+        self.run_to(req, I)
         tr.accept_alert(f"test-{req.reference}", self.op)
-        req = self.run_to(req, 3 * I)
+        req = self.run_to(req, 2 * I, 3 * I)
         self.assertEqual((req.status, req.ai_takeover_at), ("accepted", None))
 
 
@@ -215,14 +262,14 @@ class EmergencyWorkflowTests(Base):
         e.refresh_from_db()
         return e
 
-    def test_emergency_takeover_two_minutes_after_alert_3(self):
+    def test_emergency_takeover_at_alert_3(self):
         e = self.em(self.a)
         if e.escalated_at:
             self.skipTest("AI triage rated this test emergency severe")
-        e = self.run_to(e, I, 2 * I)
-        self.assertEqual((e.alert_count, e.escalated_at), (3, None))
-        e = self.run_to(e, 3 * I)
-        self.assertEqual(e.escalation_reason, "no_operator")
+        e = self.run_to(e, I)
+        self.assertEqual((e.alert_count, e.escalated_at), (2, None))
+        e = self.run_to(e, 2 * I)                                   # alert 3 + takeover at 04:00
+        self.assertEqual((e.alert_count, e.escalation_reason), (3, "no_operator"))
         self.assertEqual(self.notes(self.a, f"Emergency {e.reference}: help is being arranged"), 1)
         self.assertIsNone(e.accepted_at)
 

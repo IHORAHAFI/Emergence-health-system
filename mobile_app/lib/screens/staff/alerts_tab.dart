@@ -102,11 +102,12 @@ class _AlertsTabState extends State<AlertsTab> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => w)).then((_) => _load());
   }
 
-  /// "Alert 2 of 3 · next 1:12" -> "Alert 3 of 3 · AI takeover in 0:40" -> "AI TAKEOVER - waiting for a human"
+  /// "Alert 1 of 3 · next 1:12" -> "Alert 2 of 3 · alert 3 + AI takeover in 0:40" -> "AI TAKEOVER - waiting for a human"
   String _stage(Map<String, dynamic> a) {
     final n = ((a['alert_count'] ?? 1) as int).clamp(1, 3);
     if (a['ai_takeover'] == true) return 'AI TAKEOVER - waiting for a human';
-    if (a['stage'] == 'takeover_due') return 'Alert 3 of 3 · AI takeover in ${_countdown(a['takeover_at'])}';
+    if (a['stage'] == 'takeover_due') return 'Alert 3 of 3 · AI takeover starting';
+    if (a['takeover_at'] != null) return 'Alert $n of 3 · alert 3 + AI takeover in ${_countdown(a['takeover_at'])}';
     return 'Alert $n of 3${a['next_alert_at'] != null ? ' · next ${_countdown(a['next_alert_at'])}' : ''}';
   }
 

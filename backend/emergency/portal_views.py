@@ -277,3 +277,28 @@ def paramedic_action(request):
         except (KeyError, ValueError):
             messages.error(request, "Invalid position.")
     return redirect("paramedic_home")
+
+
+@login_required
+def request_contact(request):
+    """Patient asks for a doctor / health professional (web). Same backend workflow as the mobile app:
+    proactive.report -> operator siren alerts 1-3 -> AI takeover if nobody answers (emergency/alert_workflow.py)."""
+    from patient_monitoring import proactive
+    from patient_monitoring.models import MonitoringEvent
+    if request.user.role != "patient":
+        return HttpResponseForbidden("This page is for patients.")
+    open_req = MonitoringEvent.objects.filter(patient=request.user, kind="contact_request",
+                                              status__in=MonitoringEvent.OPEN).first()
+    if request.method == "POST":
+        if open_req:
+            messages.info(request, "Your earlier request is still open - a health professional will contact you.")
+            return redirect("request_contact")
+        text = request.POST.get("reason", "").strip()[:500]
+        if not text:
+            messages.warning(request, "Please write in a few words what you need help with.")
+            return redirect("request_contact")
+        proactive.report(request.user, "contact_request", [], text, by=request.user)
+        messages.success(request, "Your request was sent. An operator has been alerted and a health professional "
+                                  "will contact you.")
+        return redirect("request_contact")
+    return render(request, "portal/request_contact.html", {"open_req": open_req})

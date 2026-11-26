@@ -15,7 +15,7 @@
     {% for v, l in statuses %}<option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ v|capfirst }}</option>{% endfor %}</select></div>
   <div class="col-md-3 d-grid"><button class="btn btn-navy"><i class="bi bi-funnel"></i> Filter</button></div>
 </div></form>
-<div class="card"><div class="table-responsive"><table class="table align-middle">
+<div class="card" id="tr-list" data-refresh><div class="table-responsive"><table class="table align-middle">
   <thead><tr><th>Request ID</th><th>Patient name</th><th>Patient ID</th><th>Test requested</th><th>Date</th><th>Time</th><th>Status</th><th class="text-end">Action</th></tr></thead><tbody>
   {% for r in page %}<tr class="pending-row {% if r.status == 'pending' %}table-warning{% endif %}" data-ref="{{ r.reference }}">
     <td class="fw-semibold small"><a href="{% url 'test_request_detail' r.reference %}">{{ r.reference }}</a>{% if r.emergency %}<br><span class="badge bg-danger">emergency {{ r.emergency.reference }}</span>{% endif %}</td>
@@ -43,7 +43,7 @@ App.live(async () => {
   const r = await fetch("{% url 'operator_feed' %}", {credentials: 'same-origin'});
   if (!r.ok) return;
   const d = await r.json(), s = d.open_count + ':' + d.pending.map(p => p.reference).join(',');
-  if (sig !== null && s !== sig) location.reload();
+  if (sig !== null && s !== sig) App.refresh();  // in place: a reload would stop the siren
   sig = s;
 }, {interval: 5000});
 </script>

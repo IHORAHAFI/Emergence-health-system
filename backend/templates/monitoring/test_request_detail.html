@@ -3,6 +3,7 @@
 {% block title %}{{ req.reference }}{% endblock %}
 {% block page_title %}Patient test requests{% endblock %}
 {% block content %}
+<div id="trd-page" data-refresh>
 <nav aria-label="breadcrumb"><ol class="breadcrumb small"><li class="breadcrumb-item"><a href="{% url 'test_requests' %}">Patient test requests</a></li><li class="breadcrumb-item active">{{ req.reference }}</li></ol></nav>
 <div class="page-header">
   <div><h1>{{ req.reference }} · {{ req.test_names }}</h1>
@@ -67,11 +68,17 @@
     </tbody></table></div></div>
   </div>
 </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
 // stay in sync if the request changes elsewhere (e.g. patient cancels)
 let st = "{{ req.status }}";
-App.live(async () => { const r = await fetch("{% url 'test_data' req.reference %}", {credentials: 'same-origin'}); if (r.ok && (await r.json()).status !== st) location.reload(); }, {interval: 5000});
+App.live(async () => {
+  const r = await fetch("{% url 'test_data' req.reference %}", {credentials: 'same-origin'});
+  if (!r.ok) return;
+  const now = (await r.json()).status;
+  if (now !== st) { st = now; App.refresh(); }  // in place: a reload would stop the siren
+}, {interval: 5000});
 </script>
 {% endblock %}

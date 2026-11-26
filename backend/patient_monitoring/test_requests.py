@@ -137,6 +137,8 @@ def accept(req, operator):
     _tell_patient(req, "Test request accepted",
                   f"An operator received your request {req.reference} ({req.test_names}). Testing will start soon.")
     push("operators", "test_request", req, status=req.status)
+    from emergency import alert_workflow
+    alert_workflow.cancelled(req, operator)  # audit: remaining alerts + AI takeover cancelled
     return req
 
 
@@ -363,6 +365,8 @@ def accept_alert(key, operator):
                 assigned_operator=operator):
             # e.g. the AI started it: a human now takes over responsibility
             req.refresh_from_db()
+            from emergency import alert_workflow
+            alert_workflow.cancelled(req, operator)
             _tell_patient(req, "A staff member took your test",
                           f"{operator.get_full_name() or operator.username} is now responsible for {req.reference}.")
             push("operators", "test_request", req, status=req.status)
@@ -382,6 +386,8 @@ def accept_alert(key, operator):
                                         message=f"{name} has your request and will contact you.", channel="in_app",
                                         delivered=True, delivery_status="sent", provider="in_app")
             services.audit(operator, ev.emergency, "service_request_accepted", f"event {ev.pk}")
+            from emergency import alert_workflow
+            alert_workflow.cancelled(ev, operator)
             push("operators", "service_request", None, status="accepted")
         return
     raise TestRequestError("Unknown alert.")

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Talk to a health professional" %}{% endblock %}
+{% block page_title %}{% translate "Talk to a health professional" %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="alert alert-danger small"><b>{% translate "In an emergency" %}</b> {% translate "do not use this page" %} - <a class="alert-link" href="{% url 'request_emergency' %}">{% translate "request emergency help" %}</a> {% translate "or call" %} {{ hotline }}.</div>
+    {% if open_req %}
+    <div class="card p-3">
+      <h2 class="h5"><i class="bi bi-headset text-primary"></i> {% translate "Your request is open" %}</h2>
+      <p class="mb-1">{{ open_req.reason }}</p>
+      <p class="small text-muted mb-2">{% translate "Sent" %} {{ open_req.created_at|date:"d M H:i" }} · {{ open_req.get_status_display }}{% if open_req.accepted_by %} · {% translate "handled by" %} {{ open_req.accepted_by.get_full_name|default:open_req.accepted_by.username }}{% endif %}</p>
+      {% if open_req.ai_response.patient_message %}<div class="small border rounded p-2" style="white-space:pre-line"><b>{% translate "From your assistant (automatic, not a doctor):" %}</b>
+{{ open_req.ai_response.patient_message }}</div>{% endif %}
+    </div>
+    {% else %}
+    <form method="post" class="card p-3">{% csrf_token %}
+      <h2 class="h5"><i class="bi bi-headset text-primary"></i> {% translate "What do you need help with?" %}</h2>
+      <label for="reason" class="visually-hidden">{% translate "Reason" %}</label>
+      <textarea id="reason" name="reason" class="form-control mb-3" rows="4" maxlength="500" required placeholder="{% translate 'e.g. I want advice about my blood pressure medicine' %}"></textarea>
+      <button class="btn btn-primary btn-lg w-100"><i class="bi bi-send"></i> {% translate "Ask for a health professional" %}</button>
+      <p class="small text-muted mt-2 mb-0">{% translate "An operator is alerted at once. If nobody can answer within a few minutes, the AI assistant sends you general information while a person follows up." %}</p>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

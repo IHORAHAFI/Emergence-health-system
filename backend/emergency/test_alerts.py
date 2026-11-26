@@ -154,12 +154,9 @@ class ScheduleAndEscalationTests(TestCase):
         escalation.tick(t0 + self.td(seconds=120))
         e.refresh_from_db()
         self.assertEqual((e.alert_count, e.escalated_at), (2, None))
-        escalation.tick(t0 + self.td(seconds=240))                 # 3rd alert - no takeover yet
+        escalation.tick(t0 + self.td(seconds=240))                 # 3rd alert -> AI takeover at once
         e.refresh_from_db()
-        self.assertEqual((e.alert_count, e.escalated_at), (3, None))
-        escalation.tick(t0 + self.td(seconds=360))                 # 2 more minutes -> AI takeover
-        e.refresh_from_db()
-        self.assertEqual(e.escalation_reason, "no_operator")
+        self.assertEqual((e.alert_count, e.escalation_reason), (3, "no_operator"))
         self.assertEqual(self.notes(self.p1, f"Emergency {e.reference}: help is being arranged"), 1)
         self.assertEqual(self.notes(self.op, f"ESCALATED {e.reference}"), 1)
         self.assertEqual(self.notes(self.p2, f"Emergency {e.reference}"), 0)   # only the right patient
@@ -187,7 +184,6 @@ class ScheduleAndEscalationTests(TestCase):
         t = max(e1.last_alert_at, e2.last_alert_at)
         escalation.tick(t + self.td(seconds=121))
         escalation.tick(t + self.td(seconds=242))
-        escalation.tick(t + self.td(seconds=363))
         e1.refresh_from_db(); e2.refresh_from_db()
         self.assertEqual((e1.alert_count, e1.escalated_at), (1, None))   # accepted: siren stopped
         self.assertEqual(e2.alert_count, 3)
@@ -234,8 +230,10 @@ class ScheduleAndEscalationTests(TestCase):
         self.assertTrue(a1["next_alert_at"])
         self.assertFalse(a1["escalated"])
 
-    def test_page_works_without_siren_file(self):
+    def test_dashboard_gets_the_verified_siren(self):
         self.client.force_login(self.op)
         page = self.client.get(reverse("dashboard"))
         self.assertEqual(page.status_code, 200)
-        self.assertIn('data-siren=""', page.content.decode())   # file not added yet -> panel says so
+        self.assertIn("police_wail_emergency_siren", page.content.decode())  # the real file, verified
+        self.assertIn('data-siren-problem=""', page.content.decode())
+        # (the missing-file case is covered in emergency/test_workflow.py SirenFileTests)
