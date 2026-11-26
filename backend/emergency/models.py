@@ -162,3 +162,77 @@ class StatusLog(models.Model):
 
     class Meta:
         ordering = ["at"]
+
+
+class AmbulanceJourney(models.Model):
+    """SIMULATED ambulance journey: hospital -> patient (road route) -> pickup -> hospital (road route).
+
+    The server is the source of truth. The ambulance position is computed from the stored road route and the time
+    spent in the current leg (see emergency/journey.py), so a browser refresh, a reconnect or a server restart
+    continues from the same place and no competing movement loops can exist. Never a real vehicle position."""
+
+    class Status(models.TextChoices):
+        WAITING_LOCATION = "WAITING_LOCATION", "Waiting for a valid patient location"
+        ROUTING = "ROUTING", "Calculating road route"
+        EN_ROUTE_TO_PATIENT = "EN_ROUTE_TO_PATIENT", "En route to patient"
+        ARRIVED_AT_PATIENT = "ARRIVED_AT_PATIENT", "Arrived at patient"
+        PICKING_UP_PATIENT = "PICKING_UP_PATIENT", "Picking up patient"
+        PATIENT_ON_BOARD = "PATIENT_ON_BOARD", "Patient on board"
+        EN_ROUTE_TO_HOSPITAL = "EN_ROUTE_TO_HOSPITAL", "Transporting patient to hospital"
+        ARRIVED_AT_HOSPITAL = "ARRIVED_AT_HOSPITAL", "Arrived at hospital (journey completed)"
+        FAILED = "FAILED", "Stopped - needs operator attention"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    emergency = models.ForeignKey(EmergencyRequest, on_delete=models.CASCADE, related_name="journeys")
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    ambulance = models.ForeignKey("ambulances.Ambulance", on_delete=models.CASCADE, related_name="journeys")
+    start_hospital = models.ForeignKey("hospitals.Hospital", null=True, blank=True, on_delete=models.SET_NULL,
+                                       related_name="+")
+    destination_hospital = models.ForeignKey("hospitals.Hospital", null=True, blank=True, on_delete=models.SET_NULL,
+                                             related_name="+")
+    start_latitude = models.FloatField(null=True, blank=True)
+    start_longitude = models.FloatField(null=True, blank=True)
+    pickup_latitude = models.FloatField(null=True, blank=True)
+    pickup_longitude = models.FloatField(null=True, blank=True)
+    destination_latitude = models.FloatField(null=True, blank=True)
+    destination_longitude = models.FloatField(null=True, blank=True)
+
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.ROUTING)
+    is_open = models.BooleanField(default=True)
+    version = models.PositiveIntegerField(default=0, help_text="Optimistic lock: every state change increments it")
+    error = models.CharField(max_length=255, blank=True)
+
+    current_latitude = models.FloatField(null=True, blank=True)
+    current_longitude = models.FloatField(null=True, blank=True)
+    progress = models.FloatField(default=0, help_text="0..1 along the current leg's road route")
+    route_to_patient = models.JSONField(default=dict, blank=True)
+    route_to_hospital = models.JSONField(default=dict, blank=True)
+    routing_source = models.CharField(max_length=40, blank=True)
+
+    simulation_mode = models.CharField(max_length=12, default="simulated", editable=False)
+    sim_speedup = models.FloatField(default=10, help_text="Simulated movement is this many times faster than the "
+                                                          "routing service's real-world travel estimate")
+    pickup_seconds = models.PositiveIntegerField(default=20)
+    phase_started_at = models.DateTimeField(null=True, blank=True)
+    paused_at = models.DateTimeField(null=True, blank=True)
+    paused_seconds = models.FloatField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    arrived_patient_at = models.DateTimeField(null=True, blank=True)
+    pickup_completed_at = models.DateTimeField(null=True, blank=True)
+    arrived_hospital_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["emergency"], condition=models.Q(is_open=True),
+                                    name="one_open_journey_per_emergency"),
+            models.UniqueConstraint(fields=["ambulance"], condition=models.Q(is_open=True),
+                                    name="one_open_journey_per_ambulance"),
+        ]
+
+    def __str__(self):
+        return f"Journey {self.pk} {self.ambulance_id} -> {self.emergency_id} [{self.status}] (SIMULATED)"

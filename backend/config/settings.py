@@ -207,3 +207,12 @@ MONITOR_MAX_PROMPTS = int(os.getenv("MONITOR_MAX_PROMPTS", "3"))
 
 # A GPS position is shown as LIVE for this many seconds, then as LAST KNOWN (stale)
 LOCATION_LIVE_SECONDS = int(os.getenv("LOCATION_LIVE_SECONDS", "120"))
+
+# SIMULATED ambulance journeys (hospital -> patient -> hospital along road routes). See emergency/journey.py
+JOURNEY_AUTO_START = os.getenv("JOURNEY_AUTO_START", "True") == "True"
+JOURNEY_SIM_SPEEDUP = float(os.getenv("JOURNEY_SIM_SPEEDUP", "10"))    # marker moves 10x faster than the route estimate
+JOURNEY_PICKUP_SECONDS = int(os.getenv("JOURNEY_PICKUP_SECONDS", "20"))
+JOURNEY_ARRIVAL_HOLD_SECONDS = int(os.getenv("JOURNEY_ARRIVAL_HOLD_SECONDS", "5"))
+# Road routing: OSRM HTTP API (public demo server by default - fair use, no API key; self-host for production)
+ROUTING_URL = os.getenv("ROUTING_URL", "https://router.project-osrm.org")
+ROUTING_TIMEOUT = int(os.getenv("ROUTING_TIMEOUT", "10"))

@@ -20,10 +20,10 @@ _lock = threading.Lock()
 def run_once():
     from django.db import close_old_connections
     from patient_monitoring import proactive, simulation
-    from . import alert_workflow
+    from . import alert_workflow, journey
     close_old_connections()
     n = 0
-    for step in (alert_workflow.tick, proactive.tick, simulation.tick_all):
+    for step in (alert_workflow.tick, proactive.tick, simulation.tick_all, journey.tick):
         try:
             n += step() or 0
         except Exception:

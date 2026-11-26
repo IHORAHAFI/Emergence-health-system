@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Tracking {{ em.reference }}{% endblock %}
 {% block page_title %}Tracking {{ em.reference }}{% endblock %}
 {% block content %}
@@ -18,6 +19,8 @@
       <div id="eta" class="mb-2"></div>
       <div id="amb" class="small"></div>
       <div id="hosp" class="small mt-1"></div>
+      <div class="border rounded p-2 mt-2"><div class="small fw-semibold mb-1"><i class="bi bi-truck-front"></i> Ambulance journey <span class="badge badge-sim">SIMULATED</span></div>
+        <div id="journey-panel" aria-live="polite"><span class="small text-muted">Loading...</span></div></div>
       <div class="border rounded p-2 mt-2" id="loc-box">
         <div class="d-flex align-items-center gap-2 flex-wrap"><b class="small">{% if user.role == 'patient' %}My location{% else %}Patient location{% endif %}:</b> <span id="loc-badge"></span></div>
         {% if user.role == 'patient' and em.is_active %}
@@ -38,6 +41,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="{% static 'js/journey-map.js' %}"></script>
 <script>
 const map = App.tiles(L.map('map').setView([-1.9441, 30.0619], 12));  // initial view only - not a location
 let patM = null, accC = null, ambM = null, hospM = null, line = null, fitted = false;
@@ -64,13 +68,15 @@ async function refresh() {
   document.getElementById('hosp').innerHTML = d.hospital ? `<i class="bi bi-hospital"></i> Destination: <b>${E(d.hospital.name)}</b>` : '';
   document.getElementById('sim-note').innerText = d.ambulance && d.ambulance.simulated ? 'Ambulance position is SIMULATED for this demonstration - not real GPS.' : (d.ambulance ? 'Ambulance position from crew device GPS.' : '');
   const patient = showPatient(d.patient_location);
-  if (d.ambulance) {
+  const jOn = window.jm && window.jm.state;  // a SIMULATED journey draws its own ambulance, routes and hospitals
+  if (jOn) { [ambM, line, hospM].forEach(x => x && map.removeLayer(x)); ambM = line = hospM = null; }
+  if (d.ambulance && !jOn) {
     if (!ambM) ambM = L.marker(d.ambulance.pos, {icon: App.icon('bi-truck-front-fill', '#e8590c')}).addTo(map);
     ambM.setLatLng(d.ambulance.pos);
     if (line) { map.removeLayer(line); line = null; }
     if (patient) line = L.polyline([d.ambulance.pos, patient], {color: '#e8590c', dashArray: '6'}).addTo(map);
   }
-  if (d.hospital && !hospM) hospM = L.marker(d.hospital.pos, {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map).bindPopup(E(d.hospital.name));
+  if (d.hospital && !hospM && !jOn) hospM = L.marker(d.hospital.pos, {icon: App.icon('bi-hospital-fill', '#1d4ed8')}).addTo(map).bindPopup(E(d.hospital.name));
   if (!fitted) { const pts = [patient, d.ambulance && d.ambulance.pos, d.hospital && d.hospital.pos].filter(Boolean);
     if (pts.length > 1) map.fitBounds(pts, {padding: [40, 40]}); else if (pts.length) map.setView(pts[0], 15); fitted = true; }
   document.getElementById('recs').innerHTML = (d.recommendations || []).map(h =>
@@ -80,6 +86,8 @@ async function refresh() {
     `<li class="mb-2"><b>${E(l.status)}</b> <span class="text-muted small">${new Date(l.at).toLocaleTimeString()}</span><br><span class="small">${E(l.note)}</span></li>`).join('');
 }
 refresh(); setInterval(refresh, 5000);
+window.jm = JourneyMap.attach(map, {url: "/api/journeys/by-emergency/{{ em.reference|escapejs }}/",
+  panel: document.getElementById('journey-panel'), controls: false, onChange: () => refresh()});
 {% if user.role == 'patient' and em.is_active %}
 // Live GPS sharing (patient's own device, own emergency, only while this page is open)
 let sharing = null;

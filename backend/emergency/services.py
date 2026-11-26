@@ -129,6 +129,8 @@ def dispatch(em, hospital_id=None, by=None):
     em.assigned_hospital = hospital
 
     if open_assignment(em):  # re-dispatch: free the previous ambulance first
+        from . import journey
+        journey.close_for_emergency(em, "Re-dispatched to another ambulance")
         release_assignment(em, AmbulanceAssignment.Outcome.RELEASED)
         em.assigned_ambulance = None
 
@@ -158,6 +160,10 @@ def dispatch(em, hospital_id=None, by=None):
             sms(ambulance.contact_phone, f"NEW emergency {em.reference}", summary, em)
         Ambulance.objects.filter(pk=ambulance.pk, status=A.ASSIGNED).update(status=A.DISPATCHED)
         ambulance.status = A.DISPATCHED
+        # SIMULATED road journey (only for ambulances flagged location_is_simulated); started after the commit so
+        # the dispatch itself never waits for, or fails because of, the routing service
+        from . import journey
+        transaction.on_commit(lambda: journey.auto_start(em))
     else:
         notify_user(em.patient, "Request received",
                     f"{em.reference}: all ambulances are busy. An operator has been alerted and will "
@@ -256,6 +262,9 @@ def update_status(em, new_status, by=None, note=""):
         release_assignment(em, AmbulanceAssignment.Outcome.CANCELLED)
     if new_status in ("completed", "cancelled"):
         em.completed_at = timezone.now()
+    if new_status in ("arrived", "completed", "cancelled"):
+        from . import journey
+        journey.close_for_emergency(em, f"Emergency marked {new_status}")
     em.save()
     log_status(em, note, by)
     notify_user(em.patient, f"Emergency {em.reference} update", f"Status: {em.get_status_display()}", em)

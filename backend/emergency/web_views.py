@@ -156,6 +156,7 @@ def emergency_detail(request, pk):
         "assignments": em.assignments.select_related("ambulance", "assigned_by"),
         "notifications": em.notifications.select_related("recipient", "hospital")[:30],
         "available_ambulances": Ambulance.objects.filter(status="available").count(),
+        "journey": em.journeys.first(),
     })
 
 

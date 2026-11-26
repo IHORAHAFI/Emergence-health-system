@@ -10,6 +10,7 @@ from notifications.views import NotificationViewSet
 from . import patient_api as pa
 from . import staff_api as sa
 from . import proactive_api as pr
+from . import journey_api as ja
 
 router = DefaultRouter()
 router.register("hospitals", HospitalViewSet, basename="hospital")
@@ -44,6 +45,12 @@ urlpatterns = [
     path("caregivers/patients/<int:pid>/report/", pr.caregiver_report),
     path("staff/events/", pr.staff_events),
     path("staff/events/<int:pk>/close/", pr.staff_event_close),
+    path("journeys/", ja.journeys),
+    path("journeys/start/", ja.journey_start),
+    path("journeys/by-emergency/<str:ref>/", ja.journey_for_emergency),
+    path("journeys/<int:pk>/", ja.journey_detail),
+    path("journeys/<int:pk>/action/", ja.journey_action),
+    path("journeys/<int:pk>/pickup-location/", ja.journey_pickup_location),
     path("staff/alerts/", sa.alerts),
     path("staff/alerts/accept/", sa.alert_accept),
     path("staff/tests/", sa.tests),
