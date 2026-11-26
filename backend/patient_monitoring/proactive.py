@@ -300,6 +300,8 @@ def report(patient, kind, symptoms=(), text="", by=None, source=None):
         _notify_staff(ev, f"Patient asks for contact - {patient.get_full_name() or patient.username}", ev.reason)
         ev.status = E.Status.HELP
         ev.save()
+        from emergency import alert_workflow
+        alert_workflow.start(ev)  # operator siren: a human service was requested
         return ev
     k = "caregiver_report" if who == "caregiver" else "patient_report"
     ev = _create(patient, k, "severe" if severe else "concern",
@@ -309,6 +311,8 @@ def report(patient, kind, symptoms=(), text="", by=None, source=None):
         ev.status = E.Status.HELP
         ev.save()
         _notify_staff(ev, f"Symptom report - {patient.get_full_name() or patient.username}", ev.reason)
+        from emergency import alert_workflow
+        alert_workflow.start(ev)  # operator siren (severe reports were already escalated to an emergency)
     return ev
 
 

@@ -182,7 +182,10 @@ ASSISTANT_HISTORY_DAYS = int(os.getenv("ASSISTANT_HISTORY_DAYS", "30"))
 
 # Operator siren: one alert per request every ALERT_INTERVAL_SECONDS until accepted; AI escalation after N alerts
 ALERT_INTERVAL_SECONDS = int(os.getenv("ALERT_INTERVAL_SECONDS", "120"))
-ALERT_ESCALATE_AFTER = int(os.getenv("ALERT_ESCALATE_AFTER", "3"))
+ALERT_ESCALATE_AFTER = 3  # fixed: 3 alerts, then AI takeover one interval later (emergency/alert_workflow.py)
+# Development: ALERT_INTERVAL_SECONDS=10 runs the whole 3-alert + takeover sequence in ~30 s. Production: 120.
+# AI takeover may start the EXISTING virtual IoT devices for an unhandled test request (values labelled SIMULATED)
+AI_TAKEOVER_ALLOW_SIMULATION = os.getenv("AI_TAKEOVER_ALLOW_SIMULATION", "True") == "True"
 # Siren file played on the operator dashboard (relative to static/)
 ALERT_SIREN_FILE = os.getenv("ALERT_SIREN_FILE", "audio/police_wail_emergency_siren.mp3")
 

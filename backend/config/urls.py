@@ -55,6 +55,8 @@ urlpatterns = [
     path("dashboard/test-requests/", tests.test_request_list, name="test_requests"),
     path("dashboard/test-requests/feed.json", tests.operator_feed, name="operator_feed"),
     path("dashboard/alerts/accept/", tests.alert_accept, name="alert_accept"),
+    path("dashboard/service-requests/<int:pk>/", tests.service_request_detail, name="service_request_detail"),
+    path("dashboard/service-requests/<int:pk>/action/", tests.service_request_action, name="service_request_action"),
     path("dashboard/test-requests/<str:ref>/", tests.test_request_detail, name="test_request_detail"),
     path("dashboard/test-requests/<str:ref>/action/", tests.test_request_action, name="test_request_action"),
     # ambulance crew

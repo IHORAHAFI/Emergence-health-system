@@ -27,8 +27,11 @@
     </div>
     <div class="card p-3 mb-3" id="start">
       <div class="section-title">Actions</div>
+      {% if req.ai_takeover_at %}<div class="alert alert-dark small py-2"><b>AI takeover</b> after 3 unanswered alerts: {{ req.ai_response.action|default:"none" }}. {% if req.ai_response.action == 'started_simulation' %}Values are <b>SIMULATED</b>.{% endif %} A human must take responsibility.</div>{% endif %}
       {% if req.status == 'pending' %}
         <form method="post" action="{% url 'test_request_action' req.reference %}">{% csrf_token %}<button name="action" value="accept" class="btn btn-success w-100 mb-2"><i class="bi bi-check2-circle"></i> Accept request</button></form>
+      {% elif not req.assigned_operator and req.is_open %}
+        <form method="post" action="{% url 'test_request_action' req.reference %}">{% csrf_token %}<button name="action" value="claim" class="btn btn-danger w-100 mb-2"><i class="bi bi-person-check"></i> Take responsibility (stop alarm)</button></form>
       {% endif %}
       {% if req.status == 'accepted' or req.status == 'testing' %}
         {% if session %}

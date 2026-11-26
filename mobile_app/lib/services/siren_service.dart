@@ -42,10 +42,12 @@ class SirenService {
       await _player.stop();
       return false;
     }
-    final due = alerts.where((a) => ((a['alert_count'] ?? 1) as int) > (played[a['key']] ?? 0)).toList();
+    // at most 3 sirens per request (the server stops counting at 3; this guards older servers too)
+    int count(Map a) => ((a['alert_count'] ?? 1) as int).clamp(1, 3);
+    final due = alerts.where((a) => count(a) > (played[a['key']] ?? 0)).toList();
     if (due.isEmpty) return false;
     for (final a in due) {
-      await p.setInt('siren_played_${a['key']}', (a['alert_count'] ?? 1) as int);
+      await p.setInt('siren_played_${a['key']}', count(a));
     }
     if (muted || sirenPath.isEmpty) return false; // muted / no file: visual alert only
     _url = sirenPath.startsWith('http') ? sirenPath : '${ApiService.serverRoot}$sirenPath';

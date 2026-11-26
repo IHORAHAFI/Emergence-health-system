@@ -95,6 +95,8 @@ def create_request(patient, tests, note=""):
                     f"{name} ({req.patient_code}) requests: {req.test_names}."
                     + (f" Active emergency {em.reference}." if em else ""))
     services.audit(patient, em, "test_requested", req.reference)
+    from emergency import alert_workflow
+    alert_workflow.start(req)  # alert 1 on every operator dashboard
     return req
 
 
@@ -296,45 +298,51 @@ STATUS_LABEL = {  # the four labels operators see on every alert
 
 
 def unhandled_alerts():
-    """Every real patient request no operator has handled yet, oldest first.
-    * Emergency: still open (not completed/cancelled) and not accepted by an operator.
-      (Automatic dispatch does not count as handling: a human must acknowledge it.)
-    * Test request: still PENDING (accepting or cancelling it is the existing workflow)."""
+    """Every patient service request no authorised human has taken yet, oldest first, with its own alert schedule.
+    Emergencies (open, not accepted - automatic dispatch is not handling), test requests (no operator assigned)
+    and service requests (contact / symptom / caregiver reports). See emergency/alert_workflow.py."""
     from django.urls import reverse
-    from emergency import escalation
-    now = timezone.now()
-    step = escalation.interval()
+    from emergency import alert_workflow as wf, escalation
+    from .models import MonitoringEvent
     out = []
-    for e in escalation.unhandled().select_related("patient")[:50]:
+    for e in wf.BY_KEY["emergency"].unhandled().select_related("patient")[:50]:
         out.append({"key": f"emergency-{e.pk}", "kind": "emergency", "reference": e.reference,
                     "patient": e.patient_name or e.patient.get_full_name() or e.patient.username,
-                    "patient_code": f"P-{e.patient_id:05d}", "type": e.get_emergency_type_display(),
+                    "patient_code": f"P-{e.patient_id:05d}", "type": f"Emergency: {e.get_emergency_type_display()}",
                     "submitted_at": e.created_at.isoformat(), "priority": e.priority,
                     "status": e.status, "status_label": "PENDING", "status_detail": e.get_status_display(),
                     "url": reverse("emergency_detail", args=[e.pk]),
-                    # server-side siren schedule: the page plays the siren when alert_count goes up
-                    "alert_count": e.alert_count,
-                    "next_alert_at": escalation.next_alert_at(e).isoformat() if e.last_alert_at else None,
                     "escalated": bool(e.escalated_at), "escalation_reason": e.escalation_reason,
-                    "severe": bool(escalation.severe_reasons(e))})
-    for r in R.objects.filter(status=R.Status.PENDING).select_related("patient")[:50]:
+                    "severe": bool(escalation.severe_reasons(e)), **wf.schedule(e)})
+    for r in wf.BY_KEY["test"].unhandled().select_related("patient")[:50]:
         out.append({"key": f"test-{r.reference}", "kind": "test", "reference": r.reference,
                     "patient": r.patient.get_full_name() or r.patient.username, "patient_code": r.patient_code,
                     "type": f"Medical test: {r.test_names}", "submitted_at": r.requested_at.isoformat(),
                     "priority": "high" if r.emergency_id else "medium",
                     "status": r.status, "status_label": "PENDING", "status_detail": r.get_status_display(),
                     "url": reverse("test_request_detail", args=[r.reference]),
-                    # same 2-minute cadence, derived from the request time (no escalation for test requests)
-                    "alert_count": 1 + int((now - r.requested_at) / step),
-                    "next_alert_at": (r.requested_at + step * (1 + int((now - r.requested_at) / step))).isoformat(),
-                    "escalated": False, "escalation_reason": "", "severe": False})
+                    "escalated": bool(r.ai_takeover_at), "escalation_reason": (r.ai_response or {}).get("action", ""),
+                    "severe": False, **wf.schedule(r)})
+    for ev in wf.BY_KEY["service"].unhandled().select_related("patient")[:50]:
+        out.append({"key": f"service-{ev.pk}", "kind": "service", "reference": f"REQ-{ev.pk}",
+                    "patient": ev.patient.get_full_name() or ev.patient.username,
+                    "patient_code": f"P-{ev.patient_id:05d}", "type": ev.get_kind_display(),
+                    "detail": ev.reason, "submitted_at": ev.created_at.isoformat(),
+                    "priority": "high" if ev.severity in ("urgent", "severe") else "medium",
+                    "status": ev.status, "status_label": "PENDING", "status_detail": ev.get_status_display(),
+                    "url": reverse("service_request_detail", args=[ev.pk]),
+                    "escalated": bool(ev.ai_takeover_at), "escalation_reason": "", "severe": ev.severity == "severe",
+                    **wf.schedule(ev)})
     return sorted(out, key=lambda a: a["submitted_at"])
 
 
 def accept_alert(key, operator):
-    """Accept one alert by key ("emergency-<id>" or "test-<ref>")."""
+    """An authorised operator takes responsibility for one request: its alerts and AI takeover stop; the others
+    keep ringing. Viewing a request never counts as accepting it."""
     from emergency import services as em_services
     from emergency.models import EmergencyRequest
+    from .models import MonitoringEvent
+    _require_operator(operator)
     kind, _, ident = key.partition("-")
     if kind == "emergency" and ident.isdigit():
         em = EmergencyRequest.objects.filter(pk=int(ident)).first()
@@ -351,6 +359,30 @@ def accept_alert(key, operator):
             raise TestRequestError("Request not found.")
         if req.status == R.Status.PENDING:
             accept(req, operator)
+        elif req.status in R.OPEN and R.objects.filter(pk=req.pk, assigned_operator__isnull=True).update(
+                assigned_operator=operator):
+            # e.g. the AI started it: a human now takes over responsibility
+            req.refresh_from_db()
+            _tell_patient(req, "A staff member took your test",
+                          f"{operator.get_full_name() or operator.username} is now responsible for {req.reference}.")
+            push("operators", "test_request", req, status=req.status)
+        return
+    if kind == "service" and ident.isdigit():
+        ev = MonitoringEvent.objects.filter(pk=int(ident)).first()
+        if ev is None or ev.status not in MonitoringEvent.OPEN:
+            raise TestRequestError("Request not found or already closed.")
+        if MonitoringEvent.objects.filter(pk=ev.pk, accepted_at__isnull=True).update(
+                accepted_at=timezone.now(), accepted_by=operator):
+            from . import proactive
+            ev.refresh_from_db()
+            name = operator.get_full_name() or operator.username
+            proactive._log(ev, "operator", f"Accepted by {name}")
+            ev.save(update_fields=["log"])
+            Notification.objects.create(recipient=ev.patient, title="A staff member is handling your request",
+                                        message=f"{name} has your request and will contact you.", channel="in_app",
+                                        delivered=True, delivery_status="sent", provider="in_app")
+            services.audit(operator, ev.emergency, "service_request_accepted", f"event {ev.pk}")
+            push("operators", "service_request", None, status="accepted")
         return
     raise TestRequestError("Unknown alert.")
 
@@ -358,10 +390,10 @@ def accept_alert(key, operator):
 def operator_feed():
     """What the operator alarm needs: unhandled requests + open test requests + recent critical vital-sign alerts
     (used by polling and after WS nudges)."""
-    from emergency import escalation
+    from emergency import alert_workflow
     from .models import EmergencyAlert
     try:
-        escalation.tick()  # advance the per-request siren counters (idempotent, safe under concurrent polls)
+        alert_workflow.tick()  # advance each request's own alert schedule (idempotent, safe under concurrent polls)
         from . import proactive
         proactive.tick()   # re-prompt patients, handle no-response, start due check-ins
     except Exception:

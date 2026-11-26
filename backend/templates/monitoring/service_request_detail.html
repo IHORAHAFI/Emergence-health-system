@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block h1 %}{% endblock %}
+{% block title %}Request #{{ ev.pk }}{% endblock %}
+{% block page_title %}Patient service request{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1>{{ ev.get_kind_display }}</h1>
+    <p class="subtitle">{{ p.get_full_name|default:p.username }} · P-{{ p.pk|stringformat:"05d" }} · received {{ ev.created_at|date:"d M Y H:i:s" }} ({{ ev.created_at|timesince }} ago)</p></div>
+  <span class="status-pill fs-6 {% if ev.accepted_at %}info{% elif ev.status == 'closed' %}success{% else %}warning{% endif %}">{% if ev.status == 'closed' %}COMPLETED{% elif ev.accepted_at %}ACCEPTED{% else %}PENDING{% endif %}</span>
+</div>
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card p-3 mb-3">
+      <div class="section-title">Request</div>
+      <p class="mb-1">{{ ev.reason }}</p>
+      {% if ev.response.symptoms %}<p class="small mb-1"><b>Symptoms:</b> {{ ev.response.symptoms|join:", " }}</p>{% endif %}
+      <p class="small text-muted mb-0">Alert {{ ev.alert_count }} of 3{% if ev.last_alert_at %} · last alert {{ ev.last_alert_at|date:"H:i:s" }}{% endif %}</p>
+    </div>
+    {% if ev.ai_takeover_at %}
+    <div class="card p-3 mb-3 border-dark">
+      <div class="section-title">AI takeover ({{ ev.ai_takeover_at|date:"H:i:s" }})</div>
+      <p class="small mb-1"><b>Sent to the patient:</b></p>
+      <p class="small" style="white-space:pre-line">{{ ev.ai_response.patient_message }}</p>
+      <p class="small text-muted mb-0">AI information only - a human must accept and follow up.</p>
+    </div>
+    {% endif %}
+    <div class="card p-3">
+      <div class="section-title">History</div>
+      <ul class="small mb-0">{% for l in ev.log %}<li><b>{{ l.by }}</b> {{ l.text }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card p-3">
+      <div class="section-title">Actions</div>
+      {% if not ev.accepted_at and ev.is_open %}
+      <form method="post" action="{% url 'service_request_action' ev.pk %}">{% csrf_token %}<button name="action" value="accept" class="btn btn-danger w-100 mb-2"><i class="bi bi-check2-circle"></i> Accept request (stop alarm)</button></form>
+      {% elif ev.accepted_by %}<p class="small">Accepted by <b>{{ ev.accepted_by.get_full_name|default:ev.accepted_by.username }}</b> · {{ ev.accepted_at|date:"H:i" }}</p>{% endif %}
+      {% if ev.is_open %}
+      <form method="post" action="{% url 'service_request_action' ev.pk %}">{% csrf_token %}
+        <input type="hidden" name="action" value="close">
+        <label class="form-label small" for="reason">Close with reason</label>
+        <input id="reason" name="reason" class="form-control form-control-sm mb-2" maxlength="200" required placeholder="e.g. called the patient, advice given">
+        <button class="btn btn-outline-success btn-sm w-100">Close request</button>
+      </form>
+      {% endif %}
+      {% if ev.emergency %}<a class="btn btn-outline-secondary btn-sm w-100 mt-2" href="{% url 'emergency_detail' ev.emergency.pk %}">Open emergency {{ ev.emergency.reference }}</a>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

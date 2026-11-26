@@ -1,10 +1,10 @@
 """Siren schedule and AI escalation for emergencies no operator has accepted.
 
-Schedule (per request, stored on EmergencyRequest so a browser refresh never resets it):
-  alert 1 when the request arrives -> every ALERT_INTERVAL another alert while still unaccepted.
-  After ALERT_ESCALATE_AFTER alerts (default 3, i.e. ~4 minutes) the AI escalation runs ONCE.
+Schedule: see emergency/alert_workflow.py (alerts 1-3 every ALERT_INTERVAL, AI takeover one interval after
+alert 3 - this module's escalate() IS the takeover for emergencies). Stored on EmergencyRequest, so a browser
+refresh or a server restart never resets it.
   Severe symptoms escalate immediately on arrival (no waiting for three alerts).
-  The siren keeps repeating until a human accepts, cancels or completes the request.
+  The siren rings 3 times; the request then stays visible in red ("AI takeover - waiting for a human") until accepted.
 
 What the AI escalation does (and does not do):
   * reads THIS emergency and its consented vital signs, labelling each reading REAL or SIMULATED;
@@ -65,8 +65,9 @@ def severe_reasons(em):
 
 # ------------------------------------------------------------------ schedule
 def start(em):
-    """Alert 1 at arrival; severe requests escalate at once."""
-    EmergencyRequest.objects.filter(pk=em.pk, alert_count=0).update(alert_count=1, last_alert_at=timezone.now())
+    """Alert 1 at arrival (shared alert workflow); severe requests are escalated to humans at once."""
+    from . import alert_workflow
+    alert_workflow.start(em)
     em.refresh_from_db()
     if severe_reasons(em):
         escalate(em, "severe_symptoms")
@@ -74,22 +75,9 @@ def start(em):
 
 
 def tick(now=None):
-    """Advance every unhandled request's own counter; escalate the ones that reached the limit. Returns #changed."""
-    now = now or timezone.now()
-    changed = 0
-    for em in unhandled().filter(last_alert_at__lte=now - interval()):
-        # conditional update: two simultaneous ticks cannot both count the same alert
-        if EmergencyRequest.objects.filter(pk=em.pk, alert_count=em.alert_count, accepted_at__isnull=True).update(
-                alert_count=F("alert_count") + 1, last_alert_at=now):
-            changed += 1
-            em.refresh_from_db()
-            if em.alert_count >= escalate_after() and not em.escalated_at:
-                escalate(em, "no_operator")
-    # requests created before the schedule existed (alert_count 0) start now
-    for em in unhandled().filter(alert_count=0):
-        start(em)
-        changed += 1
-    return changed
+    """Kept for existing callers: the shared workflow handles emergencies, tests and service requests."""
+    from . import alert_workflow
+    return alert_workflow.tick(now)
 
 
 def next_alert_at(em):

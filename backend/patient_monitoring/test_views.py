@@ -127,6 +127,9 @@ def test_request_action(request, ref):
         if action == "accept":
             svc.accept(req, request.user)
             messages.success(request, f"{req.reference} accepted - the patient has been told.")
+        elif action == "claim":  # take over a test the AI started after unanswered alerts
+            svc.accept_alert(f"test-{req.reference}", request.user)
+            messages.success(request, f"You are now responsible for {req.reference}.")
         elif action == "start":
             session = svc.start(req, request.user, request.POST.get("scenario", "normal"),
                                 float(request.POST.get("speed") or 1))
@@ -172,3 +175,43 @@ def alert_accept(request):
     except svc.TestRequestError as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=400)
     return JsonResponse({"ok": True, **svc.operator_feed()})
+
+
+@operator_required
+def service_request_detail(request, pk):
+    """Operator page for a patient's request for a professional / symptom or caregiver report."""
+    from .models import MonitoringEvent
+    ev = get_object_or_404(MonitoringEvent.objects.select_related("patient", "emergency", "accepted_by"), pk=pk)
+    services.audit(request.user, ev.emergency, "service_request_viewed", f"event {ev.pk}", request)  # viewing != accepting
+    return render(request, "monitoring/service_request_detail.html", {"ev": ev, "p": ev.patient})
+
+
+@operator_required
+@require_POST
+def service_request_action(request, pk):
+    from django.utils import timezone
+    from . import proactive
+    from .models import MonitoringEvent
+    ev = get_object_or_404(MonitoringEvent, pk=pk)
+    action = request.POST.get("action")
+    try:
+        if action == "accept":
+            svc.accept_alert(f"service-{ev.pk}", request.user)
+            messages.success(request, "Accepted - the patient has been told.")
+        elif action == "close":
+            reason = request.POST.get("reason", "").strip()[:200]
+            if not reason:
+                raise svc.TestRequestError("Write why the request is closed (e.g. 'called the patient, advice given').")
+            if not ev.accepted_at:
+                svc.accept_alert(f"service-{ev.pk}", request.user)
+                ev.refresh_from_db()
+            proactive._log(ev, "operator", f"Closed by {request.user.get_full_name() or request.user.username}: {reason}")
+            ev.status, ev.closed_at = MonitoringEvent.Status.CLOSED, timezone.now()
+            ev.save()
+            services.audit(request.user, ev.emergency, "service_request_closed", f"event {ev.pk}: {reason}")
+            messages.success(request, "Closed.")
+        else:
+            raise svc.TestRequestError("Unknown action.")
+    except svc.TestRequestError as e:
+        messages.error(request, str(e))
+    return redirect("service_request_detail", pk=ev.pk)

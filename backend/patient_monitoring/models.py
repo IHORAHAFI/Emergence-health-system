@@ -89,6 +89,12 @@ class MedicalTestRequest(models.Model):
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancelled_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                      related_name="+")
+    # Operator alert workflow (server-side, per request): alert 1 on arrival, alerts 2 and 3 every ALERT_INTERVAL
+    # while nobody has taken responsibility, then AI takeover one interval after alert 3 (see emergency/alert_workflow).
+    alert_count = models.PositiveSmallIntegerField(default=0)
+    last_alert_at = models.DateTimeField(null=True, blank=True)
+    ai_takeover_at = models.DateTimeField(null=True, blank=True)
+    ai_response = models.JSONField(default=dict, blank=True, help_text="What the AI takeover did (audit)")
 
     class Meta:
         ordering = ["-requested_at"]
@@ -499,9 +505,12 @@ class MonitoringEvent(models.Model):
         HELP = "needs_help", "Patient asked for help"
         NO_RESPONSE = "no_response", "No response"
         ESCALATED = "escalated", "Escalated to humans"
+        AI_RESPONDED = "ai_responded", "AI responded - waiting for a human"
         CLOSED = "closed", "Closed"
 
-    OPEN = ("awaiting_response", "needs_help", "no_response", "escalated")
+    OPEN = ("awaiting_response", "needs_help", "no_response", "escalated", "ai_responded")
+    # kinds that are requests for a human service (they enter the operator alert workflow)
+    SERVICE_KINDS = ("contact_request", "patient_report", "caregiver_report")
 
     patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="monitoring_events")
     kind = models.CharField(max_length=20, choices=Kind.choices)
@@ -528,6 +537,15 @@ class MonitoringEvent(models.Model):
     dedupe_key = models.CharField(max_length=80, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+")
+    # Operator alert workflow (server-side, per request): alert 1 on arrival, alerts 2 and 3 every ALERT_INTERVAL
+    # while nobody has taken responsibility, then AI takeover one interval after alert 3 (see emergency/alert_workflow).
+    alert_count = models.PositiveSmallIntegerField(default=0)
+    last_alert_at = models.DateTimeField(null=True, blank=True)
+    ai_takeover_at = models.DateTimeField(null=True, blank=True)
+    ai_response = models.JSONField(default=dict, blank=True, help_text="What the AI takeover did (audit)")
 
     class Meta:
         ordering = ["-created_at"]

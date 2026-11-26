@@ -154,17 +154,19 @@ class ScheduleAndEscalationTests(TestCase):
         escalation.tick(t0 + self.td(seconds=120))
         e.refresh_from_db()
         self.assertEqual((e.alert_count, e.escalated_at), (2, None))
-        escalation.tick(t0 + self.td(seconds=240))                 # 3rd alert -> AI escalation
+        escalation.tick(t0 + self.td(seconds=240))                 # 3rd alert - no takeover yet
         e.refresh_from_db()
-        self.assertEqual(e.alert_count, 3)
+        self.assertEqual((e.alert_count, e.escalated_at), (3, None))
+        escalation.tick(t0 + self.td(seconds=360))                 # 2 more minutes -> AI takeover
+        e.refresh_from_db()
         self.assertEqual(e.escalation_reason, "no_operator")
         self.assertEqual(self.notes(self.p1, f"Emergency {e.reference}: help is being arranged"), 1)
         self.assertEqual(self.notes(self.op, f"ESCALATED {e.reference}"), 1)
         self.assertEqual(self.notes(self.p2, f"Emergency {e.reference}"), 0)   # only the right patient
-        escalation.tick(t0 + self.td(seconds=360))                 # keeps alerting, never re-escalates
-        escalation.tick(t0 + self.td(seconds=480))
+        escalation.tick(t0 + self.td(seconds=480))                 # no 4th siren, never re-escalates
+        escalation.tick(t0 + self.td(seconds=600))
         e.refresh_from_db()
-        self.assertEqual(e.alert_count, 5)
+        self.assertEqual(e.alert_count, 3)
         self.assertEqual(self.notes(self.op, f"ESCALATED {e.reference}"), 1)
         self.assertEqual(self.notes(self.p1, f"Emergency {e.reference}: help is being arranged"), 1)
         self.assertNotIn(e.status, ("completed", "cancelled"))     # stays open for a human
@@ -185,6 +187,7 @@ class ScheduleAndEscalationTests(TestCase):
         t = max(e1.last_alert_at, e2.last_alert_at)
         escalation.tick(t + self.td(seconds=121))
         escalation.tick(t + self.td(seconds=242))
+        escalation.tick(t + self.td(seconds=363))
         e1.refresh_from_db(); e2.refresh_from_db()
         self.assertEqual((e1.alert_count, e1.escalated_at), (1, None))   # accepted: siren stopped
         self.assertEqual(e2.alert_count, 3)

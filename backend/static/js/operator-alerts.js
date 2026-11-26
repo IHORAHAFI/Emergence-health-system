@@ -1,15 +1,15 @@
 // Operator emergency alarm (loaded only on operator / admin pages - never on patient devices).
 //
-// * The list of UNHANDLED patient requests comes from the server (operator_feed -> "alerts"): open emergencies no
-//   operator has accepted yet, and pending medical-test requests. The page never decides on its own what is
-//   unhandled, so refreshing, reconnecting or opening a second tab cannot create or lose an alert.
-// * Siren: the operator's selected Police Wail file (ALERT_SIREN_FILE). The server keeps a per-request alert
-//   counter (1 on arrival, +1 every 2 minutes while unaccepted; AI escalation after the 3rd). The page plays the
-//   siren once each time a count goes up, so accepting one request never silences the others.
-// * Browsers block sound until the user interacts with the page. If playback is refused, a red
-//   "Enable emergency sound" button explains this; one click unlocks sound for the tab.
-// * Mute silences the siren only - the red panel, counts and toasts keep working.
-// * Several open tabs share one siren (a localStorage timestamp), so the sound is not doubled.
+// * The SERVER is the source of truth (operator_feed -> "alerts"): every unhandled patient service request
+//   (emergency, medical test, request for a professional, symptom / caregiver report - from web or mobile),
+//   each with its OWN alert_count (1 on arrival, 2 and 3 every ALERT_INTERVAL) and AI-takeover state.
+//   Refreshing, reconnecting or opening a second tab cannot create, replay or lose an alert.
+// * Siren: the verified Police Wail file (emergency/siren.py). The page plays the WHOLE file once each time a
+//   request's alert_count goes up (max 3 per request) - never continuously.
+// * Browsers only allow sound after the operator interacts with the page: an "Enable emergency sound" bar is shown
+//   until it is clicked once in this tab. Every playback failure is shown in red (missing file, load error,
+//   blocked autoplay) - nothing fails silently. Visual alerts always keep working.
+// * Mute silences the siren only. Several tabs share one siren (localStorage), so the sound is not doubled.
 // * Updates: WebSocket nudges + polling fallback (App.live).
 (function () {
   const body = document.body, FEED = body.dataset.operatorFeed;
@@ -19,24 +19,58 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
   };
+  const session = {
+    get(k) { try { return sessionStorage.getItem(k) === '1'; } catch (e) { return false; } },
+    set(k) { try { sessionStorage.setItem(k, '1'); } catch (e) { /* ignore */ } },
+  };
 
   // ---------------------------------------------------------------- sound
-  // The SERVER counts alerts per request (alert_count goes 1, 2, 3, ... every 2 minutes while unaccepted).
-  // The page plays the siren once whenever a request's count is higher than the count already played.
-  // "opPlayed" is shared by all tabs, so only one tab plays each alert and a refresh never replays or skips one.
+  // One Audio object for the whole page (never recreated). soundState: 'locked' (needs a click), 'ready',
+  // 'blocked' (browser refused), 'error' (file missing / cannot load). soundProblem explains errors.
+  let soundState = SIREN_URL ? (session.get('opSoundUnlocked') ? 'ready' : 'locked') : 'error';
+  let soundProblem = SIREN_URL ? '' : (body.dataset.sirenProblem || 'Siren file is not installed on the server.');
   const siren = SIREN_URL ? new Audio(SIREN_URL) : null;
-  if (siren) { siren.preload = 'auto'; siren.volume = 0.9; }
-  let muted = store.get('opMuted', false), blocked = false, alerts = [], known = null;
+  if (siren) {
+    siren.preload = 'auto';
+    siren.volume = 1.0;
+    siren.addEventListener('error', () => {
+      const code = siren.error ? siren.error.code : 0;  // 2 network, 3 decode, 4 not supported / not found
+      soundState = 'error';
+      soundProblem = code === 4 ? 'The siren file could not be loaded (not found or unsupported format).'
+        : code === 3 ? 'The siren file is damaged and cannot be decoded.'
+        : 'The siren file could not be downloaded (network error).';
+      render();
+    });
+  }
+  let muted = store.get('opMuted', false), alerts = [];
 
   function stopSiren() { if (siren) { siren.pause(); siren.currentTime = 0; } }
 
-  function owed() {  // alerts whose latest count has not been played yet
-    const played = store.get('opPlayed', {});
-    return alerts.filter(a => (a.alert_count || 1) > (played[a.key] || 0));
+  // Must run inside a click: browsers then allow this tab to play sound later without another click.
+  function unlockSound() {
+    if (!siren) return;
+    siren.muted = true;
+    const p = siren.play();
+    const done = ok => {
+      siren.pause(); siren.currentTime = 0; siren.muted = false;
+      if (ok) { soundState = 'ready'; session.set('opSoundUnlocked'); soundProblem = ''; playSiren(); }
+      render();
+    };
+    if (p && p.then) p.then(() => done(true)).catch(err => {
+      soundState = err && err.name === 'NotAllowedError' ? 'blocked' : 'error';
+      soundProblem = soundState === 'blocked' ? 'The browser still blocks sound for this page.' : `Siren cannot play: ${err && err.message}`;
+      siren.muted = false; render();
+    });
+    else done(true);
   }
-  function markPlayed(list) {
+
+  function owed() {  // requests whose latest server-side alert has not been played yet (max 3 each)
+    const played = store.get('opPlayed', {});
+    return alerts.filter(a => Math.min(a.alert_count || 1, 3) > (played[a.key] || 0));
+  }
+  function markPlayed(list, delta = 0) {
     const played = store.get('opPlayed', {}), live = new Set(alerts.map(a => a.key));
-    for (const a of list) played[a.key] = a.alert_count || 1;
+    for (const a of list) played[a.key] = Math.min(a.alert_count || 1, 3) + delta;
     for (const k of Object.keys(played)) if (!live.has(k)) delete played[k];  // handled requests are forgotten
     store.set('opPlayed', played);
   }
@@ -44,18 +78,17 @@
   function playSiren() {
     const due = owed();
     if (!due.length) return;
-    if (muted || !siren) { markPlayed(due); return; }      // muted: count it as handled by the visual alert
+    if (muted || !siren || soundState === 'error') { markPlayed(due); return; }  // visual alert only
+    if (soundState !== 'ready') { render(); return; }                           // waiting for "Enable sound"
     markPlayed(due);                                       // claim it first so another tab does not play it too
     siren.currentTime = 0;
-    const p = siren.play();
-    if (p && p.catch) p.then(() => { if (blocked) { blocked = false; render(); } })
-      .catch(err => {
-        if (err && err.name === 'NotAllowedError') {       // autoplay blocked: give the alert back, ask for a click
-          const played = store.get('opPlayed', {});
-          for (const a of due) played[a.key] = (a.alert_count || 1) - 1;
-          store.set('opPlayed', played); blocked = true; render();
-        }
-      });
+    const p = siren.play();                                // the complete 6.97 s file, once
+    if (p && p.catch) p.catch(err => {
+      markPlayed(due, -1);                                 // give the alert back so it can be played after the fix
+      if (err && err.name === 'NotAllowedError') { soundState = 'blocked'; soundProblem = 'The browser blocked the siren.'; }
+      else if (err && err.name !== 'AbortError') { soundState = 'error'; soundProblem = `Siren cannot play: ${err.message || err.name}`; }
+      render();
+    });
   }
   // keep the "next alert in" countdowns current without redrawing the panel (a redraw could swallow a click)
   setInterval(() => document.querySelectorAll('#op-alarm .op-next').forEach(el => { el.textContent = countdown(el.dataset.at); }), 1000);
@@ -112,46 +145,87 @@
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
+  function stageLine(a) {
+    const n = Math.min(a.alert_count || 1, 3);
+    if (a.ai_takeover) return '<b>AI TAKEOVER</b> - patient answered by the assistant; waiting for a human';
+    if (a.stage === 'takeover_due') return `Alert 3 of 3 · AI takeover in <span class="op-next" data-at="${E(a.takeover_at)}">${countdown(a.takeover_at)}</span>`;
+    return `Alert ${n} of 3` + (a.next_alert_at ? ` · next in <span class="op-next" data-at="${E(a.next_alert_at)}">${countdown(a.next_alert_at)}</span>` : '');
+  }
+
+  // Always-visible sound status (also when nothing is pending, so sound can be enabled BEFORE a request arrives).
+  const soundBar = document.createElement('div');
+  soundBar.id = 'op-soundbar';
+  soundBar.setAttribute('role', 'status');
+  body.appendChild(soundBar);
+  const sbStyle = document.createElement('style');
+  sbStyle.textContent = `#op-soundbar{position:fixed;left:16px;bottom:16px;z-index:1089;max-width:min(380px,calc(100vw - 32px))}
+    #op-soundbar .sb{border-radius:12px;padding:.5rem .75rem;font-size:.85rem;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+    @media (max-width:576px){#op-soundbar{left:8px;right:8px;bottom:auto;top:64px;max-width:none}}`;
+  document.head.appendChild(sbStyle);
+
+  function renderSound() {
+    let html = '';
+    if (soundState === 'error') {
+      html = `<div class="sb bg-danger text-white"><i class="bi bi-exclamation-octagon-fill"></i> <b>Emergency siren unavailable.</b>
+        ${E(soundProblem)} Visual alerts still work.</div>`;
+    } else if (muted) {
+      html = `<div class="sb bg-warning text-dark"><i class="bi bi-volume-mute-fill"></i> Emergency sound <b>muted</b> - alerts still show.
+        <button type="button" class="btn btn-sm btn-dark ms-1 sb-unmute">Unmute</button></div>`;
+    } else if (soundState === 'locked' || soundState === 'blocked') {
+      html = `<div class="sb bg-danger text-white"><b>${soundState === 'blocked' ? 'Sound was blocked by the browser.' : 'Emergency sound is off.'}</b>
+        Browsers only play sound after you click on the page.
+        <button type="button" class="btn btn-light btn-sm w-100 mt-1 fw-bold sb-enable"><i class="bi bi-volume-up-fill"></i> Enable emergency sound</button></div>`;
+    } else {
+      html = `<div class="sb bg-success text-white"><i class="bi bi-volume-up-fill"></i> Emergency sound <b>on</b>
+        <button type="button" class="btn btn-sm btn-light ms-1 sb-test">Test</button></div>`;
+    }
+    soundBar.innerHTML = html;
+  }
+  soundBar.addEventListener('click', e => {
+    if (e.target.closest('.sb-enable')) unlockSound();
+    else if (e.target.closest('.sb-unmute')) setMuted(false);
+    else if (e.target.closest('.sb-test') && siren) {
+      siren.currentTime = 0;
+      siren.play().catch(err => { soundState = 'error'; soundProblem = `Siren cannot play: ${err.message || err.name}`; render(); });
+    }
+  });
+
   function render() {
+    renderSound();
     panel.classList.toggle('d-none', !alerts.length);
     if (!alerts.length) { panel.innerHTML = ''; return; }
     const newest = alerts[alerts.length - 1].key;
     const items = alerts.slice().reverse().map(a => `
       <div class="op-item${a.key === newest ? ' newest' : ''}" data-key="${E(a.key)}">
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
           <span class="op-status PENDING">PENDING</span>
           <span class="op-prio ${E(a.priority)}">${E(a.priority)}</span>
           ${a.key === newest ? '<span class="badge text-bg-danger">NEW</span>' : ''}
           ${a.severe ? '<span class="badge text-bg-danger">SEVERE</span>' : ''}
-          ${a.escalated ? '<span class="badge text-bg-dark" title="Patient guided by AI; staff notified">AI ESCALATED</span>' : ''}
+          ${a.ai_takeover ? '<span class="badge text-bg-dark">AI TAKEOVER</span>' : ''}
           <span class="ms-auto op-meta">${when(a.submitted_at)}</span>
         </div>
-        <div class="op-meta">Alert ${a.alert_count || 1}${a.kind === 'emergency' && !a.escalated ? ' of 3 before AI escalation' : ''}${a.next_alert_at ? ` · next in <span class="op-next" data-at="${E(a.next_alert_at)}">${countdown(a.next_alert_at)}</span>` : ''}</div>
+        <div class="op-meta">${stageLine(a)}</div>
         <div class="fw-semibold mt-1">${E(a.type)}</div>
-        <div class="op-meta">${E(a.patient)} · ${E(a.patient_code)} · ${E(a.reference)}${a.status !== 'pending' ? ' · ' + E(a.status_detail) : ''}</div>
+        ${a.detail ? `<div class="op-meta">${E(a.detail)}</div>` : ''}
+        <div class="op-meta">Patient: ${E(a.patient)} · ${E(a.patient_code)} · ${E(a.reference)}${a.status !== 'pending' ? ' · ' + E(a.status_detail) : ''}</div>
         <div class="d-flex gap-2 mt-2">
-          <button type="button" class="btn btn-danger btn-sm op-accept" data-key="${E(a.key)}"><i class="bi bi-check2-circle"></i> Accept request</button>
+          <button type="button" class="btn btn-danger btn-sm op-accept" data-key="${E(a.key)}"><i class="bi bi-check2-circle"></i> Accept / handle</button>
           <a class="btn btn-outline-secondary btn-sm" href="${E(a.url)}"><i class="bi bi-eye"></i> View details</a>
         </div>
       </div>`).join('');
     panel.innerHTML = `
       <div class="op-head">
         <span class="pulse" aria-hidden="true"></span>
-        <b>EMERGENCY</b><span>${alerts.length} unhandled request${alerts.length > 1 ? 's' : ''}</span>
+        <b>NEW PATIENT REQUEST${alerts.length > 1 ? 'S' : ''}</b><span>${alerts.length} pending</span>
         <button type="button" class="btn btn-sm btn-light ms-auto op-mute" aria-pressed="${muted}">
           <i class="bi ${muted ? 'bi-volume-mute-fill' : 'bi-volume-up-fill'}"></i> ${muted ? 'Unmute' : 'Mute'}</button>
       </div>
-      ${!SIREN_URL ? `<div class="op-enable"><b>Siren sound file is not installed.</b> Visual alerts still work.
-        Add static/audio/police_wail_emergency_siren.mp3 and run collectstatic.</div>` : ''}
-      ${blocked && !muted ? `<div class="op-enable"><b>Sound is blocked by your browser.</b> Browsers only play sound after you
-        interact with the page. <button type="button" class="btn btn-sm btn-danger mt-1 w-100 op-enable-btn">
-        <i class="bi bi-volume-up-fill"></i> Enable emergency sound</button></div>` : ''}
       <div class="op-list">${items}</div>`;
   }
 
   panel.addEventListener('click', async e => {
     if (e.target.closest('.op-mute')) return setMuted(!muted);
-    if (e.target.closest('.op-enable-btn')) { blocked = false; playSiren(); return render(); }
     const btn = e.target.closest('.op-accept');
     if (!btn) return;
     btn.disabled = true;
@@ -176,12 +250,14 @@
   }
   function setMuted(v) {
     muted = v; store.set('opMuted', v);
-    if (muted) stopSiren(); else { blocked = false; playSiren(); }  // the click also unlocks audio
+    if (muted) stopSiren(); else if (soundState !== 'ready') unlockSound();  // this click can unlock audio
     renderNav(); render();
   }
   navBtn && (navBtn.onclick = () => setMuted(!muted));
-  // any click on the page counts as the interaction browsers require; retry right away if sound was blocked
-  document.addEventListener('click', () => { if (blocked && !muted) { blocked = false; playSiren(); render(); } }, true);
+  // the first click anywhere on the page is the interaction browsers require: use it to unlock the siren
+  document.addEventListener('click', e => {
+    if (!muted && (soundState === 'locked' || soundState === 'blocked') && !e.target.closest('#op-soundbar')) unlockSound();
+  }, true);
 
   // ---------------------------------------------------------------- toasts (once per request, even across reloads)
   const toastBox = document.getElementById('op-toasts');
@@ -201,7 +277,7 @@
       if (!seen.has(a.key)) { seen.add(a.key); toast(`<b><i class="bi bi-exclamation-octagon-fill"></i> New request ${E(a.reference)}</b><br>${E(a.type)} · ${E(a.patient)}`, 'alert-danger'); }
     }
     store.set('opSeenAlerts', [...seen].filter(k => keys.has(k)).concat([...seen].filter(k => !keys.has(k)).slice(-100)));
-    alerts = list; known = keys;
+    alerts = list;
     render();
     if (!alerts.length) stopSiren();   // every request handled: silence at once
     else playSiren();                  // plays only if some request's server-side alert count went up
@@ -225,5 +301,6 @@
     if (r.ok) apply(await r.json());
   }
   renderNav();
+  render();  // show the sound status (Enable emergency sound) immediately, before any request arrives
   App.live(refresh, {interval: 5000, slowInterval: 10000});
 })();

@@ -17,7 +17,7 @@
   {% if user.is_authenticated %}<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>{% endif %}
   {% block head %}{% endblock %}
 </head>
-<body{% if user.is_authenticated and user.is_superuser or user.role == 'operator' or user.role == 'admin' %} data-operator-feed="{% url 'operator_feed' %}" data-test-requests-url="{% url 'test_requests' %}" data-alert-accept="{% url 'alert_accept' %}" data-siren="{{ siren_url }}"{% endif %}>
+<body{% if user.is_authenticated and user.is_superuser or user.role == 'operator' or user.role == 'admin' %} data-operator-feed="{% url 'operator_feed' %}" data-test-requests-url="{% url 'test_requests' %}" data-alert-accept="{% url 'alert_accept' %}" data-siren="{{ siren_url }}" data-siren-problem="{{ siren_problem }}"{% endif %}>
 <a class="skip-link" href="#main">{% translate "Skip to main content" %}</a>
 {% if user.is_authenticated %}
 <div class="app-shell">

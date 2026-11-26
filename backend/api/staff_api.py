@@ -47,7 +47,9 @@ def _feed():
     from accounts.context_processors import siren_url
     from django.conf import settings
     data = tr.operator_feed()  # also advances the per-request siren counters
+    from emergency import siren
     data["siren_url"] = siren_url()
+    data["siren_problem"] = siren.verify().get("problem", "")
     data["alert_interval_seconds"] = int(getattr(settings, "ALERT_INTERVAL_SECONDS", 120))
     return data
 
