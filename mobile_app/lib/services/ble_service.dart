@@ -52,21 +52,25 @@ class BleService {
   }
 
   /// Scans only for devices that advertise one of the supported health services.
-  Stream<List<ScanResult>> scan({Duration timeout = const Duration(seconds: 15)}) {
-    FlutterBluePlus.startScan(withServices: [for (final p in profiles) p.service], timeout: timeout);
+  /// [kinds] narrows the scan (e.g. ['thermometer']).
+  Stream<List<ScanResult>> scan({Duration timeout = const Duration(seconds: 15), List<String>? kinds}) {
+    FlutterBluePlus.startScan(
+        withServices: [for (final p in profiles) if (kinds == null || kinds.contains(p.kind)) p.service], timeout: timeout);
     return FlutterBluePlus.scanResults;
   }
 
   Future<void> stopScan() => FlutterBluePlus.stopScan();
 
-  Future<HealthProfile> connect(BluetoothDevice d) async {
+  /// Connects and subscribes to the first supported profile (only [kinds] if given).
+  Future<HealthProfile> connect(BluetoothDevice d,
+      {Duration timeout = const Duration(seconds: 20), List<String>? kinds}) async {
     await disconnect();
     await FlutterBluePlus.stopScan();
     // Educational / non-commercial project -> FlutterBluePlus nonprofit license.
-    await d.connect(license: License.nonprofit, timeout: const Duration(seconds: 20));
+    await d.connect(license: License.nonprofit, timeout: timeout);
     try {
       final services = await d.discoverServices();
-      for (final p in profiles) {
+      for (final p in profiles.where((p) => kinds == null || kinds.contains(p.kind))) {
         final svc = services.where((s) => s.uuid == p.service).firstOrNull;
         if (svc == null) continue;
         var subscribed = false;

@@ -120,6 +120,9 @@
   {% endif %}
 </div>
 
+{# ---------------- patient measurements (live, not part of the 30 s page refresh) ---------------- #}
+{% include "dashboard/_measurements.html" %}
+
 {# ---------------- map + activity ---------------- #}
 <div class="row g-3">
   <div class="col-lg-8"><section class="card p-2 h-100" aria-labelledby="map-title">

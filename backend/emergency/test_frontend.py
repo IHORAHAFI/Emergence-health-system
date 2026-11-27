@@ -263,7 +263,7 @@ class DesignV2Tests(Base):
         self.assertEqual(r["Content-Type"], "application/javascript")
         self.assertIn("never stored", r.content.decode())  # privacy rule documented in the worker
         self.assertContains(self.client.get(reverse("offline")), "tel:")
-        self.assertContains(self.client.get(reverse("landing")), "manifest.webmanifest")
+        self.assertRegex(self.client.get(reverse("landing")).content.decode(), r"manifest(\.[0-9a-f]+)?\.webmanifest")
 
     def test_staff_get_dark_theme_patients_light(self):
         self.login("operator", "operator123")

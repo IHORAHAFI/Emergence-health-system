@@ -8,6 +8,7 @@ import 'screens/staff/staff_shell.dart';
 import 'services/local_notify.dart';
 import 'services/prefs_service.dart';
 import 'services/api_service.dart';
+import 'services/measurement_outbox.dart';
 import 'theme.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -17,6 +18,8 @@ void main() async {
   await ApiService.instance.loadToken();
   await PrefsService.instance.load();
   await LocalNotify.instance.init();
+  // Measurements stored while offline (or when the app closed mid-upload) are sent again automatically.
+  if (ApiService.instance.isLoggedIn) MeasurementOutbox.instance.resume();
   // Expired session -> back to login from anywhere.
   ApiService.instance.onSessionExpired = () => navigatorKey.currentState
       ?.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);

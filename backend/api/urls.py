@@ -11,6 +11,7 @@ from . import patient_api as pa
 from . import staff_api as sa
 from . import proactive_api as pr
 from . import journey_api as ja
+from . import measurements_api as ma
 
 router = DefaultRouter()
 router.register("hospitals", HospitalViewSet, basename="hospital")
@@ -45,6 +46,7 @@ urlpatterns = [
     path("caregivers/patients/<int:pid>/report/", pr.caregiver_report),
     path("staff/events/", pr.staff_events),
     path("staff/events/<int:pk>/close/", pr.staff_event_close),
+    path("measurements/", ma.measurements),
     path("journeys/", ja.journeys),
     path("journeys/start/", ja.journey_start),
     path("journeys/by-emergency/<str:ref>/", ja.journey_for_emergency),

@@ -368,6 +368,19 @@ def reports(request):
 
 
 @staff_required
+def measurements_feed(request):
+    """Patient quick measurements for the dashboard panel, newest first, read from the database (the WebSocket
+    only says "something changed"). ?emergency=<id> narrows it to one emergency."""
+    from django.http import JsonResponse
+    from patient_monitoring import quick_measurements as qm
+    qs = qm.visible_to(request.user)
+    if request.GET.get("emergency", "").isdigit():
+        qs = qs.filter(emergency_id=int(request.GET["emergency"]))
+    rows = [m.as_dict() for m in qs[:50]]
+    return JsonResponse({"measurements": rows, "latest": qm.latest_by_patient(rows)})
+
+
+@staff_required
 def live_locations(request):
     """Active emergencies with their location status for the operator maps (polled + WebSocket nudges)."""
     from django.http import JsonResponse

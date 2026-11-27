@@ -244,3 +244,12 @@ main p a:not(.btn), main li a:not(.btn):not(.nav-link):not(.list-group-item), .a
 .btn-outline-secondary { --bs-btn-color: #3f4954; --bs-btn-border-color: #6b7785; --bs-btn-hover-bg: #3f4954; --bs-btn-hover-border-color: #3f4954; --bs-btn-active-bg: #3f4954; }
 
 .btn-outline-danger { --bs-btn-color: #a01d14; --bs-btn-border-color: #b42318; --bs-btn-hover-bg: #b42318; --bs-btn-hover-border-color: #b42318; --bs-btn-active-bg: #8e1a12; }
+
+/* live patient measurements panel + arrival toasts */
+.measure-new { animation: measure-flash 3s ease-out; }
+@keyframes measure-flash { from { background: rgba(46, 144, 250, .25); } to { background: transparent; } }
+.measure-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 1080; display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
+.measure-toast { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #101828); box-shadow: 0 8px 24px rgba(16, 24, 40, .18); border-left: 4px solid #2e90fa; font-size: .9rem; }
+.measure-toast.bad { border-left-color: #d92d20; }
+.measure-toast .bi { font-size: 1.4rem; color: #d92d20; }
+@media (prefers-reduced-motion: reduce) { .measure-new { animation: none; } }

@@ -1,0 +1,20 @@
+{% load static %}
+{# Live patient measurements. Optional: emergency=<EmergencyRequest> narrows the panel to that emergency. #}
+<section class="card mb-3" aria-labelledby="measure-title" data-measurements
+         data-url="{% url 'measurements_feed' %}{% if emergency %}?emergency={{ emergency.id }}{% endif %}">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <h2 class="h6 mb-0" id="measure-title"><i class="bi bi-heart-pulse text-danger" aria-hidden="true"></i> Patient measurements</h2>
+    <span class="small text-muted"><span class="dot pulse" aria-hidden="true"></span> <span data-conn>connecting…</span></span>
+  </div>
+  {% if not emergency %}<ul class="list-group list-group-flush" data-latest aria-label="Latest valid values per patient"></ul>{% endif %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <caption class="small px-3">Newest first. <b>ESTIMATED</b> = phone-camera heart rate (PPG, not medical-grade) ·
+        <b>MEASURED</b> = Bluetooth thermometer · <b>FAILED</b> / <b>INCONCLUSIVE</b> carry no value.</caption>
+      <thead><tr><th scope="col">Patient</th><th scope="col">Measurement</th><th scope="col">Value</th><th scope="col">Time</th>
+        <th scope="col">Source / method</th><th scope="col">Status</th><th scope="col">Device</th></tr></thead>
+      <tbody><tr><td colspan="7" class="text-muted small">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+<script src="{% static 'js/measurements.js' %}" defer></script>

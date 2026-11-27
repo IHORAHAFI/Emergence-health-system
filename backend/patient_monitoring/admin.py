@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from .models import PatientMeasurement
 from .models import (AccessAuditLog, AlertThreshold, ClinicalReview, EmergencyAlert, MedicalDevice, MonitoringConsent, SimulationSession,
                      VirtualDevice, VirtualPatient, VitalSignReading)
 
@@ -58,3 +59,17 @@ class EmergencyAlertAdmin(admin.ModelAdmin):
 admin.site.register(MedicalDevice)
 admin.site.register(MonitoringConsent)
 admin.site.register(ClinicalReview)
+
+
+@admin.register(PatientMeasurement)
+class PatientMeasurementAdmin(admin.ModelAdmin):
+    """Read-only: measurements come only from the patient's app."""
+    list_display = ("measured_at", "patient", "kind", "status", "value", "unit", "source", "emergency")
+    list_filter = ("kind", "status", "source")
+    search_fields = ("patient__username", "emergency__reference", "client_id")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

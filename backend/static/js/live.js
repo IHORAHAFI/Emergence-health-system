@@ -5,12 +5,14 @@
 (function () {
   App.live = function (refresh, opts = {}) {
     const fast = opts.interval || 4000, slow = opts.slowInterval || 15000;
-    let ws = null, wsOk = false, retry = 0, timer = null, running = false;
+    let ws = null, wsOk = false, retry = 0, timer = null, running = false, queued = null;
     const status = opts.onStatus || (() => {});
     async function run(evt) {
-      if (running) return;
+      // an event that arrives during a refresh is run right after it (not dropped until the next poll)
+      if (running) { queued = evt || queued || {}; return; }
       running = true;
       try { await refresh(evt); } catch (e) { /* next poll retries */ } finally { running = false; }
+      if (queued) { const q = queued; queued = null; run(q); }
     }
     function schedule() { clearTimeout(timer); timer = setTimeout(() => { run(); schedule(); }, wsOk ? slow : fast); }
     function connect() {
