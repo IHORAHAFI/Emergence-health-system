@@ -7,6 +7,7 @@ from ambulances.views import AmbulanceViewSet
 from emergency.views import EmergencyViewSet, ai_preview
 from hospitals.views import HospitalViewSet
 from notifications.views import NotificationViewSet
+from . import iot_api as ia
 from . import patient_api as pa
 from . import staff_api as sa
 from . import proactive_api as pr
@@ -47,6 +48,9 @@ urlpatterns = [
     path("staff/events/", pr.staff_events),
     path("staff/events/<int:pk>/close/", pr.staff_event_close),
     path("measurements/", ma.measurements),
+    path("iot/ingest/", ia.ingest),
+    path("iot/connection/", ia.connection),
+    path("iot/my-readings/", ia.my_readings),
     path("journeys/", ja.journeys),
     path("journeys/start/", ja.journey_start),
     path("journeys/by-emergency/<str:ref>/", ja.journey_for_emergency),

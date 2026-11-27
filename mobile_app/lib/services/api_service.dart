@@ -178,6 +178,9 @@ class ApiService {
     return (list as List).map((e) => VitalReading.fromJson(e)).toList();
   }
 
+  /// Arduino / USB-serial sensor readings from devices assigned to me (server enforces: mine only).
+  Future<Map<String, dynamic>> myIotReadings() async => Map<String, dynamic>.from(await get('/iot/my-readings/'));
+
   // ---- notifications ----
   Future<List<Map<String, dynamic>>> notifications({bool unreadOnly = false}) async {
     final list = await get('/notifications/', unreadOnly ? {'unread': '1'} : null);

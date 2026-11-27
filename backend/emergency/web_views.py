@@ -381,6 +381,14 @@ def measurements_feed(request):
 
 
 @staff_required
+def iot_feed(request):
+    """Arduino / USB-serial devices and their newest readings (operators and admins only)."""
+    from django.http import JsonResponse
+    from patient_monitoring import iot_ingest
+    return JsonResponse(iot_ingest.staff_feed(request.user))
+
+
+@staff_required
 def live_locations(request):
     """Active emergencies with their location status for the operator maps (polled + WebSocket nudges)."""
     from django.http import JsonResponse

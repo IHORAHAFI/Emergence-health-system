@@ -5,3 +5,4 @@ __pycache__/
 .env
 backend/staticfiles/
 backend/data_backup.json
+backend/var/

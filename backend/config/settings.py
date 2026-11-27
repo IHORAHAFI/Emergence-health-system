@@ -146,6 +146,8 @@ CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://[\w-]+\.onrender\.com$"]
 # Notifications: keep SIMULATE=True during development (logs instead of sending).
 NOTIFICATIONS_SIMULATE = os.getenv("NOTIFICATIONS_SIMULATE", "True") == "True"
 FCM_SERVER_KEY = os.getenv("FCM_SERVER_KEY", "")
+# Shared secret for the Arduino serial bridge (python manage.py run_arduino_bridge). Empty = bridge refused.
+ARDUINO_BRIDGE_TOKEN = os.getenv("ARDUINO_BRIDGE_TOKEN", "")
 # SMS: simulate (default, nothing is sent) | africastalking | twilio | generic
 SMS_PROVIDER = os.getenv("SMS_PROVIDER", "simulate").lower()
 SMS_SENDER_ID = os.getenv("SMS_SENDER_ID", "")

@@ -25,6 +25,7 @@ urlpatterns = [
     path("emergency/<int:pk>/action/", web_views.emergency_action, name="emergency_action"),
     path("live-locations.json", web_views.live_locations, name="live_locations"),
     path("measurements.json", web_views.measurements_feed, name="measurements_feed"),
+    path("iot.json", web_views.iot_feed, name="iot_feed"),
     path("ambulances/", web_views.ambulances_page, name="ambulances"),
     path("ambulances/<int:pk>/action/", web_views.ambulance_action, name="ambulance_action"),
     path("ambulances/new/", web_views.ambulance_edit, name="ambulance_new"),

@@ -632,3 +632,94 @@ class PatientMeasurement(models.Model):
             "emergency": self.emergency.reference if self.emergency_id else None,
             "emergency_id": self.emergency_id,
         }
+
+
+# ------------------------------------------------------------------ Arduino / USB-serial IoT nodes
+class IoTDevice(models.Model):
+    """An Arduino (or similar) sensor node that sends JSON Lines over USB serial through the serial bridge.
+
+    Nothing is accepted from a device until an administrator registers it here and approves it: an unknown
+    device_id that shows up on the serial port is recorded as "pending" and its readings are refused.
+    `mode` fixes what the device may send - a SIMULATED device can never deliver REAL readings and vice versa.
+    A reading is linked to a patient only when an administrator has assigned the device to that patient."""
+
+    class Mode(models.TextChoices):
+        REAL = "REAL", "Real sensors"
+        SIMULATED = "SIMULATED", "Simulation (demo - not a real measurement)"
+
+    device_id = models.CharField(max_length=64, unique=True, help_text="DEVICE_ID compiled into the sketch")
+    name = models.CharField(max_length=100, blank=True)
+    mode = models.CharField(max_length=10, choices=Mode.choices, default=Mode.SIMULATED)
+    approved = models.BooleanField(default=False, help_text="Readings are refused until an administrator approves")
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name="iot_devices", limit_choices_to={"role": "patient"},
+                                help_text="Only set when this device is really used by / authorised for this patient")
+    firmware = models.CharField(max_length=20, blank=True)
+    boot_id = models.CharField(max_length=16, blank=True)
+    interval_ms = models.PositiveIntegerField(null=True, blank=True)
+    connected = models.BooleanField(default=False, help_text="As last reported by the serial bridge")
+    port = models.CharField(max_length=64, blank=True)
+    last_seen = models.DateTimeField(null=True, blank=True)
+    sensor_state = models.JSONField(default=dict, blank=True, help_text="{sensor_type: last status}")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["device_id"]
+        verbose_name = "IoT device (Arduino)"
+
+    def __str__(self):
+        return f"{self.name or self.device_id} [{self.mode}]"
+
+
+class SensorReading(models.Model):
+    """One value from one sensor of an IoTDevice. INVALID / SENSOR_ERROR attempts are stored without a value."""
+
+    class Source(models.TextChoices):
+        REAL = "REAL", "Real sensor"
+        SIMULATED = "SIMULATED", "Simulated (demo - not a real measurement)"
+
+    class Status(models.TextChoices):
+        VALID = "VALID", "Valid"
+        INVALID = "INVALID", "Invalid (out of range)"
+        SENSOR_ERROR = "SENSOR_ERROR", "Sensor error"
+
+    class SensorType(models.TextChoices):
+        TEMPERATURE = "temperature", "Body temperature"
+        HEART_RATE = "heart_rate", "Heart rate"
+        SPO2 = "spo2", "Oxygen saturation (SpO2)"
+
+    device = models.ForeignKey(IoTDevice, on_delete=models.CASCADE, related_name="readings")
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name="sensor_readings")
+    sensor_type = models.CharField(max_length=16, choices=SensorType.choices)
+    value = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    unit = models.CharField(max_length=5)
+    source = models.CharField(max_length=10, choices=Source.choices)
+    status = models.CharField(max_length=13, choices=Status.choices)
+    method = models.CharField(max_length=20, default="usb_serial")
+    boot_id = models.CharField(max_length=16)
+    seq = models.PositiveIntegerField()
+    uptime_ms = models.PositiveBigIntegerField(null=True, blank=True)
+    measured_at = models.DateTimeField(help_text="Time the bridge received the line (the board has no clock)")
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-measured_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["device", "boot_id", "seq"], name="unique_device_reading")]
+        indexes = [models.Index(fields=["patient", "-measured_at"])]
+
+    @property
+    def is_simulated(self):
+        return self.source == self.Source.SIMULATED
+
+    def as_dict(self):
+        d, p = self.device, self.patient
+        return {
+            "id": self.id, "device_id": d.device_id, "device": d.name or d.device_id,
+            "sensor_type": self.sensor_type, "sensor_display": self.get_sensor_type_display(),
+            "value": float(self.value) if self.value is not None else None, "unit": self.unit,
+            "source": self.source, "simulated": self.is_simulated, "status": self.status,
+            "status_display": self.get_status_display(), "method": self.method,
+            "measured_at": self.measured_at.isoformat(), "received_at": self.received_at.isoformat(),
+            "patient_id": p.id if p else None, "patient": (p.get_full_name() or p.username) if p else None,
+        }

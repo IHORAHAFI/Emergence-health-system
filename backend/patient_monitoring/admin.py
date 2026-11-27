@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import PatientMeasurement
+from .models import IoTDevice, PatientMeasurement, SensorReading
 from .models import (AccessAuditLog, AlertThreshold, ClinicalReview, EmergencyAlert, MedicalDevice, MonitoringConsent, SimulationSession,
                      VirtualDevice, VirtualPatient, VitalSignReading)
 
@@ -72,4 +72,26 @@ class PatientMeasurementAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(IoTDevice)
+class IoTDeviceAdmin(admin.ModelAdmin):
+    """Approve Arduino nodes here. A device that appears on the serial port is listed as not approved first."""
+    list_display = ("device_id", "name", "mode", "approved", "patient", "connected", "port", "last_seen", "firmware")
+    list_filter = ("approved", "mode", "connected")
+    list_editable = ("approved",)
+    search_fields = ("device_id", "name")
+    readonly_fields = ("firmware", "boot_id", "interval_ms", "connected", "port", "last_seen", "sensor_state",
+                       "created_at")
+    autocomplete_fields = ("patient",)
+
+
+@admin.register(SensorReading)
+class SensorReadingAdmin(admin.ModelAdmin):
+    list_display = ("measured_at", "device", "sensor_type", "value", "unit", "source", "status", "patient")
+    list_filter = ("source", "status", "sensor_type", "device")
+    readonly_fields = [f.name for f in SensorReading._meta.fields]
+
+    def has_add_permission(self, request):  # readings only ever come from a device through the bridge
         return False
