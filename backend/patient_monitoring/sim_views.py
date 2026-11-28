@@ -81,7 +81,7 @@ def simulator_home(request):
     return render(request, "monitoring/simulator_home.html", {
         "form": form, "scenarios": simulation.SCENARIOS, "vital_labels": VITAL_LABELS,
         "patients": VirtualPatient.objects.all()[:50],
-        "sessions": SimulationSession.objects.filter(test_request__isnull=True).select_related(
+        "sessions": SimulationSession.objects.filter(test_request__isnull=True, patient__isnull=True).select_related(
             "virtual_patient", "emergency")[:30],
         "sim_emergencies": EmergencyRequest.objects.filter(is_simulated=True).exclude(
             status__in=["completed", "cancelled"])[:30],
@@ -91,7 +91,7 @@ def simulator_home(request):
 @operator_required
 def panel(request, pk):
     s = get_object_or_404(SimulationSession.objects.select_related(
-        "virtual_patient", "emergency", "test_request__patient"), pk=pk)
+        "virtual_patient", "emergency", "test_request__patient"), pk=pk, patient__isnull=True)
     return render(request, "monitoring/simulator_panel.html", {
         "s": s, "vp": s.virtual_patient, "req": s.test_request, "scenario": simulation.SCENARIOS[s.scenario],
         "state_json": simulation.state(s), "vital_labels": VITAL_LABELS})

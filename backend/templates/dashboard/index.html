@@ -122,7 +122,7 @@
 
 {# ---------------- patient measurements (live, not part of the 30 s page refresh) ---------------- #}
 {% include "dashboard/_measurements.html" %}
-{% if user.is_superuser or user.role == "operator" or user.role == "admin" %}{% include "dashboard/_iot.html" %}{% endif %}
+{% if user.is_superuser or user.role == "operator" or user.role == "admin" %}{% include "dashboard/_vital_signs.html" %}{% include "dashboard/_iot.html" %}{% endif %}
 
 {# ---------------- map + activity ---------------- #}
 <div class="row g-3">

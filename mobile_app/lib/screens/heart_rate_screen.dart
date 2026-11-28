@@ -25,7 +25,9 @@ class HeartRateScreen extends StatefulWidget {
 
 enum _Phase { preparing, ready, unavailable, measuring, done }
 
-class _HeartRateScreenState extends State<HeartRateScreen> {
+class _HeartRateScreenState extends State<HeartRateScreen> with WidgetsBindingObserver {
+  static const instructions = 'Place your fingertip gently over the rear camera and flashlight. Cover the camera lens '
+      'completely. Keep your finger still until the measurement is complete.';
   static const _collectUntil = Duration(seconds: 52); // leaves time to analyse + send inside 60 s
   static const _minAccept = Duration(seconds: 25);
 
@@ -41,11 +43,54 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
   bool _busyFrame = false;
   MeasureResult? _result;
   ValueNotifier<SendState>? _send;
+  double? _quality; // latest signal quality (0..1) from the PPG analyzer
 
   @override
   void initState() {
     super.initState();
-    _prepare();
+    WidgetsBinding.instance.addObserver(this);
+    _prepare(); // opening the screen opens the camera; the test then starts by itself
+  }
+
+  /// Status shown to the patient: READY, INITIALIZING_CAMERA, WAITING_FOR_FINGER, MEASURING, PROCESSING,
+  /// COMPLETED, SUBMITTING, SENT_TO_OPERATOR, FAILED, INCONCLUSIVE.
+  String get status {
+    switch (_phase) {
+      case _Phase.preparing:
+        return 'INITIALIZING_CAMERA';
+      case _Phase.ready:
+        return 'READY';
+      case _Phase.unavailable:
+        return 'FAILED';
+      case _Phase.measuring:
+        return (_ppg?.fingerPresent ?? false) ? 'MEASURING' : 'WAITING_FOR_FINGER';
+      case _Phase.done:
+        final r = _result;
+        if (r == null) return 'PROCESSING';
+        if (r.outcome == MeasureOutcome.inconclusive) return 'INCONCLUSIVE';
+        if (!r.valid) return 'FAILED';
+        final p = _send?.value.phase;
+        if (p == null) return 'COMPLETED';
+        if (p == SendPhase.sent) return 'SENT_TO_OPERATOR';
+        if (p == SendPhase.rejected) return 'FAILED';
+        return 'SUBMITTING';
+    }
+  }
+
+  /// The camera must be released when the app leaves the foreground; a running test cannot continue.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      if (_phase == _Phase.measuring) {
+        _finish(const MeasureResult(MeasureOutcome.failed, unit: 'bpm',
+            reason: 'Interrupted: the app was left during the measurement.'));
+      }
+      final c = _cam;
+      _cam = null;
+      if (c != null) _stopCamera(c).whenComplete(c.dispose);
+    } else if (state == AppLifecycleState.resumed && _cam == null && _phase != _Phase.done && mounted) {
+      _prepare();
+    }
   }
 
   Future<void> _prepare() async {
@@ -60,8 +105,13 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
       final c = CameraController(back, ResolutionPreset.low, enableAudio: false,
           imageFormatGroup: Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420);
       await c.initialize(); // asks for camera permission
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
       _cam = c;
-      if (mounted) setState(() => _phase = _Phase.ready);
+      setState(() => _phase = _Phase.ready);
+      _start(); // automatic: no extra Start press after "Heart Rate Test"
     } on CameraException catch (e) {
       final denied = e.code.contains('AccessDenied') || e.code.contains('Restricted');
       if (mounted) {
@@ -77,9 +127,10 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
 
   Future<void> _start() async {
     final c = _cam;
-    if (c == null || !c.value.isInitialized) return;
+    if (c == null || !c.value.isInitialized || _phase == _Phase.measuring) return;
     _ppg = PpgAnalyzer();
     _lastValidBpm = null;
+    _quality = null;
     _result = null;
     _send = null;
     _clock
@@ -87,7 +138,7 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
       ..start();
     setState(() {
       _phase = _Phase.measuring;
-      _hint = 'Cover the rear camera and the flashlight completely with your fingertip.';
+      _hint = instructions;
     });
     VoiceService.instance.say('Cover the camera and the light with your fingertip, and keep still.');
     try {
@@ -128,6 +179,7 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
       hint = 'Measuring... keep your finger still (${p.signalSeconds.toStringAsFixed(0)} s of signal)';
     } else {
       final r = p.analyze();
+      if (r.quality > 0) _quality = r.quality;
       if (r.isValid) {
         final stable = _lastValidBpm != null && (r.bpm! - _lastValidBpm!).abs() <= 4;
         _lastValidBpm = r.bpm;
@@ -147,6 +199,7 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
   Future<void> _deadline() async {
     final p = _ppg!;
     final r = p.analyze();
+    if (r.quality > 0) _quality = r.quality;
     if (r.isValid) {
       return _finish(MeasureResult(MeasureOutcome.estimated, value: r.bpm, unit: 'bpm'), r);
     }
@@ -167,7 +220,7 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
       _phase = _Phase.done;
       _result = result;
     });
-    await _stopCamera();
+    await _stopCamera(_cam);
     VoiceService.instance.say(result.valid
         ? 'Estimated heart rate ${result.value} beats per minute. Sending to the operator.'
         : 'The measurement did not succeed. You can try again.');
@@ -184,13 +237,13 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
       if (!result.valid) 'failure_reason': result.reason,
       'device': {'name': 'Phone rear camera', 'platform': Platform.operatingSystem,
           'camera': _cam?.description.name ?? '', 'flashlight': _torch},
-      'quality': ppg?.details ?? {},
+      // no images are stored or uploaded - only numbers derived from the frames
+      'quality': {...?ppg?.details, if (ppg != null) 'quality': double.parse(ppg.quality.toStringAsFixed(3))},
     });
     if (mounted) setState(() => _send = s);
   }
 
-  Future<void> _stopCamera() async {
-    final c = _cam;
+  Future<void> _stopCamera(CameraController? c) async {
     if (c == null) return;
     try {
       if (c.value.isStreamingImages) await c.stopImageStream();
@@ -198,12 +251,16 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
     try {
       if (_torch) await c.setFlashMode(FlashMode.off);
     } catch (_) {}
+    _torch = false;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
-    _stopCamera().whenComplete(() => _cam?.dispose());
+    final c = _cam;
+    _cam = null;
+    _stopCamera(c).whenComplete(() => c?.dispose());
     super.dispose();
   }
 
@@ -211,18 +268,25 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
   Widget build(BuildContext context) {
     final remaining = measurementDeadline - _clock.elapsed;
     return Scaffold(
-      appBar: AppBar(title: const Text('Heart rate (phone camera)')),
+      appBar: AppBar(title: const Text('Heart Rate Test')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Text(
-                'Your heart rate is ESTIMATED from the colour of your fingertip (not a medical device). The result '
-                'is sent to the emergency operator automatically. Takes at most 60 seconds.',
+                'CAMERA-ESTIMATED HEART RATE. The camera only reads the colour changes of your fingertip; no photos '
+                'or video are saved or uploaded. This is an estimate, not a medical-grade measurement. The result is '
+                'sent to the emergency operator automatically. Takes at most 60 seconds.',
                 style: TextStyle(color: Colors.grey.shade800)),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 6, children: [
+          Chip(label: Text('Status: $status', style: const TextStyle(fontWeight: FontWeight.w700))),
+          Chip(label: Text('Camera: ${_phase == _Phase.unavailable ? 'not available' : _cam == null ? 'starting' : 'ready'}')),
+          Chip(label: Text('Flashlight: ${_phase != _Phase.measuring ? 'off' : _torch ? 'on' : 'not supported'}')),
+        ]),
+        const SizedBox(height: 12),
         switch (_phase) {
           _Phase.preparing => const Center(
               child: Padding(padding: EdgeInsets.all(24), child: Text('Preparing the camera...'))),
@@ -242,22 +306,31 @@ class _HeartRateScreenState extends State<HeartRateScreen> {
                   icon: const Icon(Icons.favorite),
                   label: const Text('Start measurement', style: TextStyle(fontSize: 18))),
             ]),
-          _Phase.measuring => Column(children: [
+          _Phase.measuring => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (_cam != null && _cam!.value.isInitialized)
+                Center(child: ClipOval(child: SizedBox(width: 90, height: 90, child: CameraPreview(_cam!)))),
+              const SizedBox(height: 8),
               CountdownRing(remaining: remaining, caption: _hint),
               const SizedBox(height: 12),
+              const Text('Measurement progress'),
               if (_ppg != null)
                 LinearProgressIndicator(value: (_ppg!.signalSeconds / _minAccept.inSeconds).clamp(0.0, 1.0)),
+              const SizedBox(height: 10),
+              Text('Signal quality: ${_quality == null ? '-' : '${(_quality! * 100).round()}%'}'),
+              LinearProgressIndicator(
+                  value: (_quality ?? 0).clamp(0.0, 1.0),
+                  color: (_quality ?? 0) >= 0.45 ? AppColors.ok : AppColors.warn),
             ]),
           _Phase.done => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               const StepLine('Measurement completed', done: true),
               ResultCard(
                   result: _result!,
-                  label: 'Heart rate',
+                  label: 'CAMERA-ESTIMATED HEART RATE',
                   note: _result!.valid ? 'Estimated with the phone camera (PPG). Not a medical-grade measurement.' : null),
               if (_send != null) SendStatusCard(state: _send!),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                  onPressed: () => _cam == null ? _prepare() : setState(() => _phase = _Phase.ready),
+                  onPressed: () => _cam == null ? _prepare() : _start(),
                   icon: const Icon(Icons.replay),
                   label: Text(_result!.valid ? 'Measure again' : 'Try again')),
             ]),

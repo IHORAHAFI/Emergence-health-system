@@ -94,6 +94,9 @@ BATTERY_PER_TRANSMISSION = 0.25
 
 
 def phases_for(session):
+    if session.patient_id:  # home vital-signs demo: temperature + blood pressure scenarios only
+        from .home_vitals import SCENARIOS as HOME
+        return HOME.get(session.scenario, HOME["normal"])["phases"]
     if session.scenario == "custom":
         c = session.custom or {}
         target = {k: float(c[k]) for k in VITALS if c.get(k) not in (None, "")}
@@ -275,6 +278,9 @@ def tick(session, max_steps=5):
 
 def device_fields(session, kind):
     """Fields a device transmits: for a test request, only what the patient asked for."""
+    if session.patient_id:  # never heart rate: that comes only from the patient's camera test
+        from .home_vitals import FIELDS as HOME_FIELDS
+        return HOME_FIELDS.get(kind, ())
     fields = DEVICE_FIELDS[kind]
     if session.test_request_id:
         wanted = set(session.test_request.fields)
@@ -300,10 +306,15 @@ def _run_step(session):
         if dev.battery_pct <= 0:
             continue
         payload = {k: values[k] for k in device_fields(session, dev.kind)}
+        if not payload:
+            continue
         info = {"device_identifier": dev.device_id, "name": f"{dev.name} (virtual)", "kind": dev.kind,
                 "manufacturer": "simulation"}
         try:
-            if session.test_request_id:
+            if session.patient_id:
+                from .home_vitals import record as record_home
+                r = record_home(session.patient, dict(payload), info)
+            elif session.test_request_id:
                 from .test_requests import record_test_reading
                 r = record_test_reading(session.test_request, dict(payload), VitalSignReading.Source.SIMULATED,
                                         info, entered_by=session.started_by)
@@ -330,7 +341,7 @@ def _run_step(session):
 def tick_all():
     """Advance every running session (used by the background command)."""
     total = 0
-    for s in SimulationSession.objects.filter(status="running").select_related("emergency", "started_by"):
+    for s in SimulationSession.objects.filter(status="running").select_related("emergency", "started_by", "patient"):
         try:
             total += tick(s)
         except Exception:

@@ -13,6 +13,7 @@ from . import staff_api as sa
 from . import proactive_api as pr
 from . import journey_api as ja
 from . import measurements_api as ma
+from . import vitals_api as va
 
 router = DefaultRouter()
 router.register("hospitals", HospitalViewSet, basename="hospital")
@@ -68,6 +69,7 @@ urlpatterns = [
     path("tests/<str:ref>/cancel/", pa.test_cancel),
     path("tests/<str:ref>/readings/", pa.test_reading),
     path("vitals/latest/", pa.latest_vitals),
+    path("vitals/mine/", va.my_vitals),
     path("diseases/", pa.diseases),
     path("diseases/<slug:slug>/", pa.disease_detail),
     path("assistant/ask/", pa.assistant_ask),

@@ -27,10 +27,19 @@ def history_days():
 
 
 def _vitals_for_patient(user):
+    """Only called when the patient ticked "use my latest vital signs". Camera heart rate, simulated temperature and
+    simulated blood pressure are given with their origin (home_vitals.ai_context); a real device / clinician reading
+    from an emergency or test is added separately."""
+    from patient_monitoring import home_vitals
     from patient_monitoring.models import VitalSignReading
     from patient_monitoring.services import vitals_text
-    r = VitalSignReading.objects.filter(patient=user).order_by("-measured_at").first()
-    return vitals_text(r) if r else ""
+    parts = [home_vitals.ai_context(user)]
+    r = (VitalSignReading.objects.filter(patient=user)
+         .exclude(device__manufacturer=home_vitals.MANUFACTURER)  # already described by ai_context above
+         .order_by("-measured_at").first())
+    if r:
+        parts.append("Latest recorded device reading: " + vitals_text(r))
+    return "\n".join(parts)
 
 
 def _vitals_for_emergency(user, ref, request=None):

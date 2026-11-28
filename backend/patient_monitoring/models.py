@@ -199,7 +199,8 @@ class VitalSignReading(models.Model):
 
     class Meta:
         ordering = ["-measured_at"]
-        indexes = [models.Index(fields=["emergency", "-measured_at"])]
+        indexes = [models.Index(fields=["emergency", "-measured_at"]),
+                   models.Index(fields=["patient", "source", "-measured_at"])]
 
     def __str__(self):
         ref = (self.emergency.reference if self.emergency_id else
@@ -312,6 +313,10 @@ class SimulationSession(models.Model):
     test_request = models.OneToOneField(MedicalTestRequest, null=True, blank=True, on_delete=models.CASCADE,
                                         related_name="session",
                                         help_text="Patient test request: readings go to THIS request's patient")
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE,
+                                related_name="home_vitals_sessions",
+                                help_text="Home vital-signs demo: SIMULATED temperature + blood pressure for THIS "
+                                          "logged-in patient. Readings are never attached to an emergency.")
     scenario = models.CharField(max_length=20)
     custom = models.JSONField(default=dict, blank=True, help_text="Targets for the custom scenario")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.READY)
@@ -329,12 +334,14 @@ class SimulationSession(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        who = self.test_request.reference if self.test_request_id else self.virtual_patient.patient_code
+        who = (self.test_request.reference if self.test_request_id else
+               f"home:{self.patient_id}" if self.patient_id else self.virtual_patient.patient_code)
         return f"Simulation {self.id} {who} {self.scenario} [{self.status}]"
 
     @property
     def tick_seconds(self):
-        return self.BASE_TICK_SECONDS / max(self.speed, 0.1)
+        # set_speed() keeps demo sessions at >= 0.25x; home-vitals sessions use small speeds for long intervals.
+        return self.BASE_TICK_SECONDS / max(self.speed, 0.005)
 
 
 class VirtualDevice(models.Model):

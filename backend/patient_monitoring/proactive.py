@@ -212,9 +212,12 @@ def evaluate_reading(r):
         return open_ev
     if sev == "concern":
         # one borderline reading is not enough: require a second abnormal one within the confirmation window
-        earlier = [x for x in VitalSignReading.objects.filter(
+        earlier_qs = VitalSignReading.objects.filter(
             patient=r.patient, emergency=None, test_request=None, measured_at__gte=r.measured_at - CONFIRM_WINDOW,
-            measured_at__lt=r.measured_at) if _abnormal(x)]
+            measured_at__lt=r.measured_at)
+        if not r.is_simulated:  # a SIMULATED value must never confirm a real concern
+            earlier_qs = earlier_qs.exclude(source=VitalSignReading.Source.SIMULATED)
+        earlier = [x for x in earlier_qs if _abnormal(x)]
         if not earlier:
             return None
     else:
@@ -475,8 +478,10 @@ def _no_response(ev, now):
         escalate(ev, "no_response")
         return
     # a missed routine check-in alone is not an emergency - unless recent readings were concerning
-    recent = [r for r in VitalSignReading.objects.filter(patient=ev.patient, measured_at__gte=now - timedelta(hours=2))
-              if _abnormal(r)]
+    recent_qs = VitalSignReading.objects.filter(patient=ev.patient, measured_at__gte=now - timedelta(hours=2))
+    if not ev.is_simulated:  # SIMULATED demo values must never escalate a real patient's event
+        recent_qs = recent_qs.exclude(source=VitalSignReading.Source.SIMULATED)
+    recent = [r for r in recent_qs if _abnormal(r)]
     if recent:
         ev.readings.add(*recent)
         escalate(ev, "no_response_with_concerning_readings")

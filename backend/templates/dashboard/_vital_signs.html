@@ -1,0 +1,48 @@
+{% load static %}
+{# Vital Signs (operators + admins): camera-estimated heart rate + SIMULATED temperature / blood pressure.
+   Data: dashboard/home-vitals.json (database); WebSocket = nudge. Click a patient row for history charts. #}
+<section class="card mb-3" aria-labelledby="vs-title" data-vitals-operator
+         data-url="{% url 'home_vitals_feed' %}" data-control="{% url 'home_vitals_control' %}">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <h2 class="h6 mb-0" id="vs-title"><i class="bi bi-activity text-danger" aria-hidden="true"></i> Patient vital signs</h2>
+    <span class="small text-muted"><span class="dot pulse" aria-hidden="true"></span> <span data-conn>connecting…</span></span>
+  </div>
+  <div class="card-body border-bottom">
+    <form class="row g-2 align-items-end" onsubmit="return false">
+      {% csrf_token %}
+      <div class="col-12 col-md-4"><label class="form-label small mb-1" for="vs-patient">Patient</label>
+        <select class="form-select form-select-sm" id="vs-patient" name="patient"></select></div>
+      <div class="col-7 col-md-3"><label class="form-label small mb-1" for="vs-scenario">Scenario</label>
+        <select class="form-select form-select-sm" id="vs-scenario" name="scenario"></select></div>
+      <div class="col-5 col-md-2"><label class="form-label small mb-1" for="vs-interval">Every (seconds)</label>
+        <input class="form-control form-control-sm" id="vs-interval" name="interval" type="number" min="4" max="300" value="10"></div>
+      <div class="col-12 col-md-3 d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-primary flex-fill" data-action="start"><i class="bi bi-play-fill" aria-hidden="true"></i> Start simulation</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" data-action="stop"><i class="bi bi-stop-fill" aria-hidden="true"></i> Stop</button>
+      </div>
+    </form>
+    <p class="small text-muted mb-0 mt-2" data-msg role="status">The simulator generates <b>temperature and blood pressure only</b>
+      (labelled SIMULATED, never attached to an emergency, never used for alerts or dispatch). Heart rate comes only from the patient's phone-camera test.</p>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <caption class="small px-3">Latest values, newest patient first. <b>CAMERA-ESTIMATED</b> = smartphone camera PPG (not medical-grade) ·
+        <b>SIMULATED</b> = demonstration data, not a real measurement. Click a row for history.</caption>
+      <thead><tr><th scope="col">Patient</th><th scope="col">Heart rate</th><th scope="col">Temperature</th>
+        <th scope="col">Blood pressure</th><th scope="col">Simulator</th></tr></thead>
+      <tbody><tr><td colspan="5" class="text-muted small">Loading…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="card-body border-top" data-detail hidden>
+    <h3 class="h6">History: <span data-who></span></h3>
+    <div class="row g-3">
+      <div class="col-12 col-lg-4"><div class="small fw-semibold mb-1">Heart rate <span class="status-pill info">CAMERA-ESTIMATED</span></div>
+        <div style="height:200px"><canvas data-chart="hr" role="img" aria-label="Camera-estimated heart rate over time"></canvas><p class="vs-empty text-muted small" hidden>No camera readings yet.</p></div></div>
+      <div class="col-12 col-lg-4"><div class="small fw-semibold mb-1">Temperature <span class="status-pill warning">SIMULATED</span></div>
+        <div style="height:200px"><canvas data-chart="temp" role="img" aria-label="Simulated temperature over time"></canvas><p class="vs-empty text-muted small" hidden>No simulated readings yet.</p></div></div>
+      <div class="col-12 col-lg-4"><div class="small fw-semibold mb-1">Blood pressure <span class="status-pill warning">SIMULATED</span></div>
+        <div style="height:200px"><canvas data-chart="bp" role="img" aria-label="Simulated systolic and diastolic blood pressure over time"></canvas><p class="vs-empty text-muted small" hidden>No simulated readings yet.</p></div></div>
+    </div>
+  </div>
+</section>
+<script src="{% static 'js/vital-signs.js' %}" defer></script>

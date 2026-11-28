@@ -10,6 +10,7 @@ import 'assistant_screen.dart';
 import 'heart_rate_screen.dart';
 import 'home_monitoring_screen.dart';
 import 'temperature_screen.dart';
+import 'vital_signs_screen.dart';
 import 'speak_for_me_screen.dart';
 import 'voice_assistant_screen.dart';
 import 'diseases_screen.dart';
@@ -116,6 +117,7 @@ class _HomeTabState extends State<HomeTab> {
           children: [
             _tile(Icons.biotech, 'Request test', () => widget.onGo(1)),
             _tile(Icons.monitor_heart, 'Results', () => widget.onGo(2)),
+            _tile(Icons.monitor_heart_outlined, 'Vital signs', () => _open(const VitalSignsScreen())),
             _tile(Icons.favorite, 'Heart rate', () => _open(const HeartRateScreen())),
             _tile(Icons.thermostat, 'Temperature', () => _open(const TemperatureScreen())),
             _tile(Icons.sensors, 'Home monitoring', () => _open(const HomeMonitoringScreen())),

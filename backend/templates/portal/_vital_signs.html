@@ -1,0 +1,31 @@
+{% load static i18n %}
+{# Patient portal Vital Signs: own camera heart rate + SIMULATED temperature / blood pressure. Data: /api/vitals/mine/ #}
+<section class="card mb-3" aria-labelledby="pvs-title" data-vitals-patient data-url="/api/vitals/mine/">
+  <div class="card-header"><h2 class="h6 mb-0" id="pvs-title"><i class="bi bi-activity text-danger" aria-hidden="true"></i> {% translate "Vital signs monitoring" %}</h2></div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12 col-md-4"><div class="border rounded p-3 h-100">
+        <div class="d-flex justify-content-between align-items-start gap-2"><span class="fw-semibold">{% translate "Heart rate" %}</span><span class="status-pill info">CAMERA-ESTIMATED</span></div>
+        <div class="fs-4 my-1" data-v="hr">—</div>
+        <div class="small text-muted" data-v="hr-meta"></div><div class="small mt-1" data-v="hr-warn"></div>
+        <div class="small text-muted mt-1">{% translate "Source: Smartphone Camera PPG (estimate, not medical-grade)" %}</div>
+        <div style="height:140px" class="mt-2"><canvas data-chart="hr" role="img" aria-label="{% translate 'Heart rate history' %}"></canvas><p class="vs-empty text-muted small" hidden>{% translate "No history yet." %}</p></div>
+      </div></div>
+      <div class="col-12 col-md-4"><div class="border rounded p-3 h-100">
+        <div class="d-flex justify-content-between align-items-start gap-2"><span class="fw-semibold">{% translate "Body temperature" %}</span><span class="status-pill warning">SIMULATED</span></div>
+        <div class="fs-4 my-1" data-v="temp">—</div>
+        <div class="small text-muted" data-v="temp-meta"></div>
+        <div class="small text-muted mt-1">{% translate "Demonstration data - not a real measurement" %}</div>
+        <div style="height:140px" class="mt-2"><canvas data-chart="temp" role="img" aria-label="{% translate 'Temperature history' %}"></canvas><p class="vs-empty text-muted small" hidden>{% translate "No history yet." %}</p></div>
+      </div></div>
+      <div class="col-12 col-md-4"><div class="border rounded p-3 h-100">
+        <div class="d-flex justify-content-between align-items-start gap-2"><span class="fw-semibold">{% translate "Blood pressure" %}</span><span class="status-pill warning">SIMULATED</span></div>
+        <div class="fs-4 my-1" data-v="bp">—</div>
+        <div class="small text-muted" data-v="bp-meta"></div>
+        <div class="small text-muted mt-1">{% translate "Demonstration data - not a real measurement" %}</div>
+        <div style="height:140px" class="mt-2"><canvas data-chart="bp" role="img" aria-label="{% translate 'Blood pressure history' %}"></canvas><p class="vs-empty text-muted small" hidden>{% translate "No history yet." %}</p></div>
+      </div></div>
+    </div>
+  </div>
+</section>
+<script src="{% static 'js/vital-signs.js' %}" defer></script>

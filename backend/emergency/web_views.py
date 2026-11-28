@@ -388,6 +388,46 @@ def iot_feed(request):
     return JsonResponse(iot_ingest.staff_feed(request.user))
 
 
+@dispatch_required
+def home_vitals_feed(request):
+    """Vital Signs panel (operators / admins): camera heart rate + SIMULATED temperature / blood pressure.
+    ?patient=<id> adds that patient's history for the charts. Always read from the database; the WebSocket only
+    nudges. Polling also advances due home-vitals simulator steps (safe alongside run_iot_simulator)."""
+    from django.http import JsonResponse
+    from patient_monitoring import home_vitals as hv
+    hv.tick_running()
+    out = {"patients": hv.overview(), "scenarios": {k: v["label"] for k, v in hv.SCENARIOS.items()},
+           "control_patients": hv.patients_for_control(), "interval_limits": [hv.MIN_INTERVAL_S, hv.MAX_INTERVAL_S],
+           "server_time": timezone.now().isoformat()}
+    pid = request.GET.get("patient", "")
+    if pid.isdigit():
+        p = User.objects.filter(pk=int(pid), role="patient").first()
+        if p:
+            out["selected"] = {"patient_id": p.id, "patient": p.get_full_name() or p.username, **hv.summary(p, 60)}
+    return JsonResponse(out)
+
+
+@dispatch_required
+@require_POST
+def home_vitals_control(request):
+    """Start / stop the SIMULATED temperature + blood-pressure generator for one patient."""
+    from django.http import JsonResponse
+    from patient_monitoring import home_vitals as hv
+    p = User.objects.filter(pk=request.POST.get("patient") or 0, role="patient").first()
+    if p is None:
+        return JsonResponse({"detail": "Choose a patient."}, status=400)
+    try:
+        if request.POST.get("action") == "start":
+            s = hv.start(p, request.user, request.POST.get("scenario", "normal"),
+                         request.POST.get("interval", hv.DEFAULT_INTERVAL_S))
+            return JsonResponse({"ok": True, "simulation": hv.session_info(s)})
+        if request.POST.get("action") == "stop":
+            return JsonResponse({"ok": True, "stopped": hv.stop(p, request.user)})
+    except hv.HomeVitalsError as e:
+        return JsonResponse({"detail": str(e)}, status=400)
+    return JsonResponse({"detail": "Unknown action."}, status=400)
+
+
 @staff_required
 def live_locations(request):
     """Active emergencies with their location status for the operator maps (polled + WebSocket nudges)."""

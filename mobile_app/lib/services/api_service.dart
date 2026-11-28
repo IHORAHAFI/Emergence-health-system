@@ -179,6 +179,9 @@ class ApiService {
   }
 
   /// Arduino / USB-serial sensor readings from devices assigned to me (server enforces: mine only).
+  /// Vital Signs section: own camera heart rate (CAMERA_MEASURED_ESTIMATE) + simulated temperature / blood pressure.
+  Future<Map<String, dynamic>> myVitals({int limit = 30}) async =>
+      Map<String, dynamic>.from(await get('/vitals/mine/', {'limit': '$limit'}));
   Future<Map<String, dynamic>> myIotReadings() async => Map<String, dynamic>.from(await get('/iot/my-readings/'));
 
   // ---- notifications ----
