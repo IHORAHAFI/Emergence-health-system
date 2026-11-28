@@ -87,7 +87,13 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     });
     if (said.trim().isEmpty) return _reply('I did not hear anything. Press the microphone and speak again.');
     _add(said, true);
-    await _handle(VoiceIntents.parse(said), said);
+    final intent = VoiceIntents.parse(said);
+    final c = _voice.lastConfidence;
+    // Emergency words always act (a missed emergency is worse); anything else heard unclearly is NOT acted on.
+    if (intent.kind != 'emergency' && c != null && c > 0 && c < VoiceService.minConfidence) {
+      return _reply('I am not sure I understood. I heard: "$said". Please press the microphone and say it again.');
+    }
+    await _handle(intent, said);
   }
 
   Future<void> _handle(VoiceIntent i, String said) async {

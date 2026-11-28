@@ -173,6 +173,17 @@ def assistant_ask(request):
     return Response(result)
 
 
+@api_view(["POST"])
+def assistant_feedback(request):
+    """POST {response_id, rating: helpful|unhelpful|unclear|suggestion, suggestion?, message_id?, comment?}"""
+    from medical_rag import service
+    try:
+        fb = service.feedback(request.user, request.data)
+    except service.AssistantError as e:
+        return _error(e, status.HTTP_400_BAD_REQUEST)
+    return Response({"saved": True, "duplicate": fb is None}, status=status.HTTP_201_CREATED if fb else 200)
+
+
 @api_view(["GET", "DELETE"])
 def assistant_history(request, pk=None):
     from medical_rag import service

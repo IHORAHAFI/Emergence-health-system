@@ -211,6 +211,15 @@ class ApiService {
         if (emergencyRef != null) 'emergency_ref': emergencyRef,
       }));
 
+  /// Rate one answer (helpful / unhelpful / unclear) or record that a suggestion was used. Labels only.
+  Future<void> assistantFeedback(Map<String, dynamic> answer, String rating, {String? suggestion}) =>
+      post('/assistant/feedback/', {
+        'response_id': answer['response_id'],
+        if (answer['message_id'] != null) 'message_id': answer['message_id'],
+        'rating': rating,
+        if (suggestion != null) 'suggestion': suggestion,
+      });
+
   Future<List<Map<String, dynamic>>> assistantHistory() async =>
       List<Map<String, dynamic>>.from(((await get('/assistant/history/'))['conversations'] as List)
           .map((e) => Map<String, dynamic>.from(e)));

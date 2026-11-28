@@ -73,6 +73,7 @@ urlpatterns = [
     path("diseases/", pa.diseases),
     path("diseases/<slug:slug>/", pa.disease_detail),
     path("assistant/ask/", pa.assistant_ask),
+    path("assistant/feedback/", pa.assistant_feedback),
     path("assistant/history/", pa.assistant_history),
     path("assistant/history/<int:pk>/", pa.assistant_history),
     path("", include(router.urls)),

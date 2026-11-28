@@ -11,7 +11,10 @@ Privacy rules
 """
 from datetime import timedelta
 
+import uuid
+
 from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from . import retriever
@@ -80,15 +83,24 @@ def ask(user, question, conversation_id=None, save_history=True, include_vitals=
     elif include_vitals and user.is_authenticated and user.role == "patient":
         vitals = _vitals_for_patient(user)
 
+    from . import recommendations
+    recent = []
+    if conv is not None:
+        last = conv.messages.filter(role="assistant").order_by("-created_at", "-id").first()
+        recent = [x.get("id") for x in ((last.meta or {}).get("suggestions") or [])] if last else []
     result = retriever.answer(question, history=history, vitals_text=vitals,
-                              hotline=getattr(settings, "EMERGENCY_HOTLINE", "912"))
+                              hotline=getattr(settings, "EMERGENCY_HOTLINE", "912"),
+                              role=recommendations.role_of(user), recently_suggested=recent)
     result["used_vitals"] = bool(vitals)
+    result["response_id"] = str(uuid.uuid4())  # lets the user rate this answer (see feedback())
     if user.is_authenticated and save_history and result.get("ok"):
         if conv is None:
             conv = Conversation.objects.create(user=user, title=question[:120])
         ChatMessage.objects.create(conversation=conv, role="user", text=question[:2000])
-        ChatMessage.objects.create(conversation=conv, role="assistant", text=result["answer"], meta={
-            k: result.get(k) for k in ("mode", "emergency", "sources", "follow_up", "safety", "red_flags", "used_vitals")})
+        msg = ChatMessage.objects.create(conversation=conv, role="assistant", text=result["answer"], meta={
+            k: result.get(k) for k in ("mode", "emergency", "sources", "follow_up", "safety", "red_flags", "used_vitals",
+                                       "intent", "suggestions", "response_id")})
+        result["message_id"] = msg.pk
         conv.save(update_fields=["updated_at"])
     result["conversation_id"] = conv.pk if conv else None
     return result
@@ -115,3 +127,46 @@ def delete_conversations(user, conversation_id=None):
 def purge_old(days=None):
     cutoff = timezone.now() - timedelta(days=days or history_days())
     return Conversation.objects.filter(updated_at__lt=cutoff).delete()[0]
+
+
+# ------------------------------------------------------------------ feedback (no automatic learning)
+FEEDBACK_RATINGS = ("helpful", "unhelpful", "unclear", "suggestion")
+
+
+def feedback(user, data):
+    """Store one explicit rating. The answer it refers to is identified by response_id (and message_id when the
+    answer was saved in the user's own history). Nothing here changes the assistant: ratings feed the human review
+    queue and the offline, admin-approved recommendation policy only."""
+    from .models import AssistantFeedback
+    from .recommendations import CATALOG, role_of
+    rid = str(data.get("response_id") or "")
+    try:
+        uuid.UUID(rid)
+    except ValueError:
+        raise AssistantError("Unknown answer.")
+    rating = data.get("rating")
+    if rating not in FEEDBACK_RATINGS:
+        raise AssistantError("Rating must be one of: " + ", ".join(FEEDBACK_RATINGS))
+    suggestion = str(data.get("suggestion") or "")
+    if rating == "suggestion" and suggestion not in CATALOG:
+        raise AssistantError("Unknown suggestion.")
+    msg = None
+    if data.get("message_id") and user.is_authenticated:
+        msg = ChatMessage.objects.filter(pk=data["message_id"], conversation__user=user, role="assistant").first()
+        if msg is None or (msg.meta or {}).get("response_id") != rid:
+            raise AssistantError("That answer is not in your history.")
+    meta = (msg.meta if msg else {}) or {}
+    shown = [s.get("id") for s in (meta.get("suggestions") or [])] or [
+        x for x in (data.get("suggestions_shown") or []) if x in CATALOG][:6]
+    intent = (meta.get("intent") or {}).get("intent") or str(data.get("intent") or "")[:30]
+    try:
+        with transaction.atomic():  # savepoint: a duplicate must not break the caller's transaction
+            fb = AssistantFeedback.objects.create(
+                response_id=rid, user=user if user.is_authenticated else None, role=role_of(user), message=msg,
+                rating=rating, intent=intent, mode=str(meta.get("mode") or data.get("mode") or "")[:20],
+                suggestion=suggestion if rating == "suggestion" else "", suggestions_shown=shown,
+                emergency=bool(meta.get("emergency") or data.get("emergency")),
+                comment=str(data.get("comment") or "")[:300])
+    except IntegrityError:
+        return None  # the same choice was already recorded: idempotent
+    return fb

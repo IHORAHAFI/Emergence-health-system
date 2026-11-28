@@ -53,6 +53,20 @@ class VoiceService {
     } catch (_) {}
   }
 
+  /// Pause speech where the platform supports it (Android 8+ / iOS); otherwise stops (replay starts again).
+  Future<void> pauseSpeaking() async {
+    try {
+      final r = await _tts.pause();
+      if (r != 1) await _tts.stop();
+    } catch (_) {
+      await stopSpeaking();
+    }
+  }
+
+  /// Confidence of the last final recognition (0..1), or null when the speech service does not report one.
+  double? lastConfidence;
+  static const minConfidence = 0.5;
+
   Future<bool> ensureStt() async {
     if (_sttReady) return true;
     try {
@@ -80,10 +94,12 @@ class VoiceService {
     await stopSpeaking();
     final done = Completer<String>();
     var latest = '';
+    lastConfidence = null;
     Future<void> start(bool onDevice) => _stt.listen(
           onResult: (SpeechRecognitionResult r) {
             latest = r.recognizedWords;
             onPartial?.call(latest);
+            if (r.finalResult) lastConfidence = r.hasConfidenceRating ? r.confidence : null;
             if (r.finalResult && !done.isCompleted) done.complete(latest);
           },
           listenOptions: SpeechListenOptions(

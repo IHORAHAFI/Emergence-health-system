@@ -18,15 +18,21 @@ EMERGENCY_PHRASES = {
         "coughing up blood", "vomiting blood", "kill myself", "end my life", "want to die", "self harm", "self-harm",
         "anaphylaxis", "throat swelling", "swollen throat", "severe burn", "stiff neck and fever",
         "baby not breathing", "severe allergic",
+        # requests for urgent help (not only symptoms) - added after "I need emergency assistance" was missed
+        "emergency assistance", "emergency help", "need an ambulance", "call an ambulance", "send an ambulance",
+        "this is an emergency", "medical emergency", "need help now", "urgent help", "urgently need", "someone collapsed", "can't get up", "cannot get up",
     ],
     "fr": [
         "douleur thoracique", "douleur à la poitrine", "mal à la poitrine", "ne respire pas", "ne respire plus",
         "difficulté à respirer", "n'arrive pas à respirer", "inconscient", "évanoui", "saigne beaucoup",
         "hémorragie", "convulsion", "crise d'épilepsie", "avc", "paralysie", "me suicider", "suicide",
-        "étouffe", "s'étouffe", "empoisonnement", "overdose",
+        "étouffe", "s'étouffe", "empoisonnement", "overdose", "au secours", "aidez-moi", "besoin d'une ambulance",
+        "appelez une ambulance", "c'est une urgence",
     ],
-    # Kinyarwanda phrases must be supplied and checked by a native-speaking clinician before use.
-    "rw": [],
+    # Kinyarwanda: only words that ASK FOR HELP, used to detect (never to write replies) - the same words the
+    # mobile voice assistant already recognises. Recall first: a false alarm only shows the emergency banner.
+    # A native-speaking clinician must review and extend this list.
+    "rw": ["ubutabazi", "mfasha", "mutabare", "ntabara"],
 }
 
 _DOSE = re.compile(
@@ -57,8 +63,19 @@ MEDICAL_HINTS = re.compile(
     r"douleur|fièvre|santé|médicament|ndwara|umuriro|uburwayi|abbreviation|meaning|mean)|(itis|emia|osis|ectomy)\b", re.I)
 
 
+_FR_GREET = {"bonjour", "bonsoir", "salut", "merci", "coucou", "au revoir", "ça va", "aidez-moi", "au secours"}
+_RW_GREET = {"muraho", "mwaramutse", "mwiriwe", "murakoze", "urakoze", "amakuru", "murabeho", "mwirirwe", "bite",
+             "mfasha", "ubutabazi", "mutabare"}
+
+
 def detect_language(text):
-    words = set(re.findall(r"[\w']+", text.lower()))
+    low = text.lower()
+    words = set(re.findall(r"[\w'-]+", low))
+    # short messages (greetings, thanks) carry too few words for the counting below
+    if words & _RW_GREET:
+        return "rw"
+    if words & _FR_GREET or any(p in low for p in _FR_GREET if " " in p):
+        return "fr"
     fr, rw = len(words & _FR_WORDS), len(words & _RW_WORDS)
     if rw >= 2 and rw >= fr:
         return "rw"
@@ -128,6 +145,9 @@ MEDICATION_TEXT = {
 }
 DIAGNOSIS_TEXT = ("I can't diagnose you or confirm whether you are healthy. Below is general information; a health "
                   "worker can examine you and arrange tests.")
+EMERGENCY_REQUEST_TEXT = ("I can help you submit an emergency request: press the Emergency button - it sends your "
+                          "location to an operator. If someone is in immediate danger, also call local emergency "
+                          "services now. Stay with the person if it is safe.")
 NOT_FOUND_TEXT = ("I don't have trusted information about that in my medical knowledge base, so I won't guess. "
                   "Please ask a health worker.")
 OUT_OF_SCOPE_TEXT = ("I can only answer health and medical questions. Try asking about a symptom, a disease, a "

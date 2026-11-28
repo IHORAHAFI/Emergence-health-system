@@ -79,3 +79,13 @@ def related_entries(question, user, limit=3):
     scored.sort(key=lambda x: -x[0])
     return [{"name": d.name, "url": reverse("disease_detail", args=[d.slug]), "reviewed": d.is_reviewed}
             for _, d in scored[:limit]]
+
+
+@require_POST
+def feedback(request):
+    """POST {response_id, rating, suggestion?, message_id?, comment?} (CSRF-protected). Stores labels only."""
+    try:
+        fb = service.feedback(request.user, _body(request))
+    except service.AssistantError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+    return JsonResponse({"ok": True, "duplicate": fb is None}, status=201 if fb else 200)

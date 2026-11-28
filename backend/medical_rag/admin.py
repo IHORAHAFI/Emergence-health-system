@@ -53,3 +53,32 @@ class ConversationAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+from .models import AssistantFeedback, ModelVersion  # noqa: E402
+
+
+@admin.register(AssistantFeedback)
+class AssistantFeedbackAdmin(admin.ModelAdmin):
+    """Human review queue: operators/clinicians mark answers correct / incorrect / unsafe."""
+    list_display = ("created_at", "rating", "intent", "mode", "suggestion", "emergency", "review", "reviewed_by")
+    list_filter = ("rating", "review", "intent", "mode", "emergency")
+    readonly_fields = ("response_id", "user", "role", "message", "rating", "intent", "mode", "suggestion",
+                       "suggestions_shown", "emergency", "comment", "created_at", "reviewed_by", "reviewed_at")
+    fields = readonly_fields[:11] + ("review",) + readonly_fields[11:]
+
+    def save_model(self, request, obj, form, change):
+        if "review" in form.changed_data:
+            obj.reviewed_by, obj.reviewed_at = request.user, timezone.now()
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(ModelVersion)
+class ModelVersionAdmin(admin.ModelAdmin):
+    """Read-only: models are approved / rolled back with management commands so the evaluation gate always runs."""
+    list_display = ("kind", "version", "status", "approved_by", "approved_at", "created_at")
+    list_filter = ("kind", "status")
+    readonly_fields = [f.name for f in ModelVersion._meta.fields]
+
+    def has_add_permission(self, request):
+        return False

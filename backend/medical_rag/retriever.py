@@ -20,7 +20,7 @@ import logging
 import re
 import threading
 
-from . import llm, safety
+from . import conversation, llm, recommendations, safety
 
 log = logging.getLogger(__name__)
 MIN_SCORE = 0.08
@@ -235,14 +235,27 @@ def _with_context(question, history):
     return f"{question} {last}" if last else question
 
 
-def answer(question, history=None, vitals_text="", hotline="912", use_llm=True):
+def answer(question, history=None, vitals_text="", hotline="912", use_llm=True, role="anonymous",
+           recently_suggested=()):
     """Returns a dict: ok, answer, mode, emergency, red_flags, disclaimer, sources, follow_up, safety, language."""
     question = (question or "").strip()[:500]
     if not question:
         return {"ok": False, "error": "Please type a question."}
     profile = safety.assess(question)
+    intent = conversation.classify(question, profile)
+    if intent["intent"] == "emergency" and not profile["emergency"]:
+        # the classifier may ADD an emergency (recall first); it can never remove one found by the rules
+        profile = {**profile, "emergency": True, "emergency_topic": True}
     flags = profile["red_flags"]
-    base = {"disclaimer": DISCLAIMER, "red_flags": flags, "language": profile["language"],
+    suggestions = recommendations.suggest(intent["intent"], role, profile["emergency"], recently_suggested, question)
+    conversational = intent["intent"] in conversation.CONVERSATIONAL and not profile["emergency"]
+    if conversational and not (profile["medication"] or profile["diagnosis_request"]):
+        return {"ok": True, "answer": conversation.reply(intent["intent"], profile["language"], question),
+                "mode": "conversation", "emergency": False, "sources": [], "follow_up": [], "red_flags": [],
+                "language": profile["language"], "intent": intent, "suggestions": suggestions,
+                "disclaimer": DISCLAIMER,
+                "safety": {k: profile[k] for k in ("emergency", "emergency_topic", "medication", "diagnosis_request")}}
+    base = {"intent": intent, "suggestions": suggestions, "disclaimer": DISCLAIMER, "red_flags": flags, "language": profile["language"],
             "safety": {k: profile[k] for k in ("emergency", "emergency_topic", "medication", "diagnosis_request")}}
     try:
         search_q = _with_context(question, history or [])
@@ -265,7 +278,8 @@ def answer(question, history=None, vitals_text="", hotline="912", use_llm=True):
         preface.append(safety.DIAGNOSIS_TEXT)
 
     if not docs:
-        text = safety.NOT_FOUND_TEXT if profile["medical"] else safety.OUT_OF_SCOPE_TEXT
+        text = (safety.EMERGENCY_REQUEST_TEXT if emergency else
+                safety.NOT_FOUND_TEXT if profile["medical"] else safety.OUT_OF_SCOPE_TEXT)
         mode, cited = "none", []
     else:
         generated = llm.generate(question, passages, history or [], profile, vitals_text) if use_llm else None

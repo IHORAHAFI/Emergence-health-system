@@ -165,3 +165,82 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class ModelVersion(models.Model):
+    """A trained AI artefact (intent classifier, recommendation policy). Nothing trained is used until an authorised
+    person approves it: candidate -> (evaluation passes) -> approved/active. Only one ACTIVE version per kind;
+    the previous active one becomes RETIRED and can be restored (rollback)."""
+
+    class Kind(models.TextChoices):
+        INTENT = "intent", "Intent classifier"
+        RECOMMENDATION = "recommendation", "Recommendation policy"
+
+    class Status(models.TextChoices):
+        CANDIDATE = "candidate", "Candidate (not used)"
+        REJECTED = "rejected", "Rejected"
+        ACTIVE = "active", "Active"
+        RETIRED = "retired", "Retired"
+
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    version = models.CharField(max_length=40)
+    artifact = models.CharField(max_length=255, help_text="File under ai_training/models/")
+    sha256 = models.CharField(max_length=64)
+    metrics = models.JSONField(default=dict, blank=True)
+    gate = models.JSONField(default=dict, blank=True, help_text="Automatic evaluation gate results")
+    data_info = models.JSONField(default=dict, blank=True, help_text="Datasets, licences, sizes, checksums")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.CANDIDATE)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = [("kind", "version")]
+
+    def __str__(self):
+        return f"{self.kind} {self.version} [{self.status}]"
+
+
+class AssistantFeedback(models.Model):
+    """Explicit feedback on one assistant answer or suggestion. Stores labels, not the conversation: the question
+    text is kept only when the answer was saved in the user's own history (linked message, deleted with it).
+    Feedback NEVER changes safety behaviour; it only feeds the offline, human-approved recommendation policy and
+    the review queue."""
+
+    class Rating(models.TextChoices):
+        HELPFUL = "helpful", "Helpful"
+        UNHELPFUL = "unhelpful", "Not helpful"
+        UNCLEAR = "unclear", "Needs clarification"
+        SUGGESTION = "suggestion", "Suggestion used"
+
+    class Review(models.TextChoices):
+        PENDING = "pending", "Not reviewed"
+        CORRECT = "correct", "Answer correct"
+        INCORRECT = "incorrect", "Answer incorrect"
+        UNSAFE = "unsafe", "Unsafe - fix knowledge/rules"
+
+    response_id = models.CharField(max_length=36, db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name="+")
+    role = models.CharField(max_length=20, blank=True)
+    message = models.ForeignKey(ChatMessage, null=True, blank=True, on_delete=models.CASCADE, related_name="feedback")
+    rating = models.CharField(max_length=10, choices=Rating.choices)
+    intent = models.CharField(max_length=30, blank=True)
+    mode = models.CharField(max_length=20, blank=True)
+    suggestion = models.CharField(max_length=40, blank=True, help_text="Suggestion id when rating=suggestion")
+    suggestions_shown = models.JSONField(default=list, blank=True)
+    emergency = models.BooleanField(default=False)
+    comment = models.CharField(max_length=300, blank=True)
+    review = models.CharField(max_length=10, choices=Review.choices, default=Review.PENDING)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(fields=["response_id", "user", "rating", "suggestion"],
+                                               name="one_feedback_per_choice")]

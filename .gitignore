@@ -6,3 +6,8 @@ __pycache__/
 backend/staticfiles/
 backend/data_backup.json
 backend/var/
+
+# AI training: raw downloaded datasets (re-downloaded and checksum-verified by train_intent_model)
+backend/ai_training/datasets/raw/
+backend/ai_training/models/*
+!backend/ai_training/models/README.md

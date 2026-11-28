@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_service.dart';
+import '../services/voice_service.dart';
 import '../theme.dart';
 import 'diseases_screen.dart';
 import 'emergency_request_screen.dart';
+import 'heart_rate_screen.dart';
+import 'nearby_hospitals_screen.dart';
+import 'vital_signs_screen.dart';
+import 'voice_assistant_screen.dart';
 
 /// Chat with the backend's grounded medical assistant (answers come only from its reviewed knowledge base).
 class AssistantScreen extends StatefulWidget {
@@ -32,11 +38,98 @@ class _AssistantScreenState extends State<AssistantScreen> {
   bool _busy = false;
   int? _conversationId;
   bool _save = true, _useVitals = false, _isPatient = false;
+  bool _listening = false;
+  _Msg? _speaking; // the answer being read aloud
+  final _rated = <String, String>{}; // response_id -> rating given
 
   @override
   void initState() {
     super.initState();
     ApiService.instance.me().then((m) => mounted ? setState(() => _isPatient = m['role'] == 'patient') : null).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    VoiceService.instance.stopSpeaking();
+    VoiceService.instance.stop();
+    super.dispose();
+  }
+
+  /// Speak instead of typing. The recognised words are put in the text box first. A clear result is sent;
+  /// a low-confidence one is NOT sent - the patient checks / corrects it (never pretend unclear audio was understood).
+  Future<void> _mic() async {
+    final v = VoiceService.instance;
+    if (_listening) {
+      await v.stop();
+      return;
+    }
+    await v.stopSpeaking();
+    setState(() => _listening = true);
+    final text = await v.listenOnce(onPartial: (p) => _q.text = p);
+    if (!mounted) return;
+    setState(() => _listening = false);
+    if (text.trim().isEmpty) {
+      _snack(v.lastError != null && v.lastError!.contains('permission')
+          ? 'Microphone permission is off. Allow it in the phone settings to speak to the assistant.'
+          : "I didn't hear anything. Please try again closer to the phone, or type your question.");
+      return;
+    }
+    _q.text = text;
+    final c = v.lastConfidence;
+    if (c != null && c > 0 && c < VoiceService.minConfidence) {
+      _snack("I'm not sure I heard that correctly. Please check the text, correct it, then press send.");
+      return;
+    }
+    _ask();
+  }
+
+  Future<void> _speak(_Msg m) async {
+    setState(() => _speaking = m);
+    await VoiceService.instance.say(m.text, force: true); // the patient pressed Listen: always speak
+    if (mounted && _speaking == m) setState(() => _speaking = null);
+  }
+
+  Future<void> _stopSpeaking({bool pause = false}) async {
+    pause ? await VoiceService.instance.pauseSpeaking() : await VoiceService.instance.stopSpeaking();
+    if (mounted) setState(() => _speaking = null);
+  }
+
+  Future<void> _rate(Map<String, dynamic> d, String rating) async {
+    final id = d['response_id'] as String?;
+    if (id == null || _rated.containsKey(id)) return;
+    setState(() => _rated[id] = rating);
+    try {
+      await ApiService.instance.assistantFeedback(d, rating);
+    } catch (_) {/* optional */}
+  }
+
+  /// Suggested next steps open existing screens; nothing is executed automatically.
+  Future<void> _suggestion(Map<String, dynamic> d, Map<String, dynamic> s) async {
+    if (d['response_id'] != null) {
+      ApiService.instance.assistantFeedback(d, 'suggestion', suggestion: s['id']).catchError((_) {});
+    }
+    Widget? screen = switch (s['action']) {
+      'emergency' => const EmergencyRequestScreen(),
+      'heart_rate_test' => const HeartRateScreen(),
+      'vital_signs' => const VitalSignsScreen(),
+      'voice' => const VoiceAssistantScreen(),
+      'hospitals' => const NearbyHospitalsScreen(),
+      _ => null,
+    };
+    if (s['action'] == 'call_hotline') {
+      await launchUrl(Uri.parse('tel:912'));
+      return;
+    }
+    if (!mounted) return;
+    if (screen != null) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    } else {
+      _snack('${s['label']}: open it from the home screen.');
+    }
+  }
+
+  void _snack(String t) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
   }
 
   void _newChat() => setState(() {
@@ -183,15 +276,46 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   controller: _q,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _ask(),
-                  decoration: const InputDecoration(hintText: 'Type your question'),
+                  decoration: InputDecoration(hintText: _listening ? 'Listening... speak now' : 'Type or speak your question'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: _listening ? 'Stop listening' : 'Speak instead of typing',
+                onPressed: _busy ? null : _mic,
+                icon: Icon(_listening ? Icons.mic_off : Icons.mic, color: _listening ? AppColors.emergency : null),
+                iconSize: 28,
+              ),
               IconButton.filled(
                   onPressed: _busy ? null : _ask, icon: const Icon(Icons.send), iconSize: 26, padding: const EdgeInsets.all(14)),
             ]),
           ),
         ),
+      ]),
+    );
+  }
+
+  /// Listen / pause / stop (replay = Listen again) and the feedback buttons under each answer.
+  Widget _controls(_Msg m) {
+    final d = m.data;
+    final speaking = _speaking == m;
+    final id = d?['response_id'] as String?;
+    final rated = id == null ? null : _rated[id];
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+        if (!speaking)
+          IconButton(tooltip: 'Listen (replay)', onPressed: () => _speak(m), icon: const Icon(Icons.volume_up, size: 20)),
+        if (speaking) ...[
+          IconButton(tooltip: 'Pause', onPressed: () => _stopSpeaking(pause: true), icon: const Icon(Icons.pause, size: 20)),
+          IconButton(tooltip: 'Stop', onPressed: _stopSpeaking, icon: const Icon(Icons.stop, size: 20)),
+        ],
+        if (id != null && rated == null) ...[
+          IconButton(tooltip: 'Helpful', onPressed: () => _rate(d!, 'helpful'), icon: const Icon(Icons.thumb_up_outlined, size: 20)),
+          IconButton(tooltip: 'Not helpful', onPressed: () => _rate(d!, 'unhelpful'), icon: const Icon(Icons.thumb_down_outlined, size: 20)),
+          TextButton(onPressed: () => _rate(d!, 'unclear'), child: const Text('Unclear')),
+        ],
+        if (rated != null) const Text('Thanks for the feedback', style: TextStyle(fontSize: 11, color: Colors.black45)),
       ]),
     );
   }
@@ -248,10 +372,26 @@ class _AssistantScreenState extends State<AssistantScreen> {
             Text('Sources: ${sources.map((s) => s['source']).toSet().join(', ')}',
                 style: const TextStyle(fontSize: 11, color: Colors.black45)),
           ],
-          if (d?['disclaimer'] != null) ...[
+          if (d != null && (d['suggestions'] as List?)?.isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final s in (d['suggestions'] as List).map((e) => Map<String, dynamic>.from(e)))
+                Tooltip(
+                  message: s['reason'] ?? '',
+                  child: ActionChip(
+                    backgroundColor: s['pinned'] == true ? AppColors.emergency.withValues(alpha: 0.12) : null,
+                    avatar: Icon(s['pinned'] == true ? Icons.emergency : Icons.arrow_forward, size: 16),
+                    label: Text(s['label'] ?? ''),
+                    onPressed: () => _suggestion(d, s),
+                  ),
+                ),
+            ]),
+          ],
+          if (d?['disclaimer'] != null && d?['mode'] != 'conversation') ...[
             const SizedBox(height: 6),
             Text(d!['disclaimer'], style: const TextStyle(fontSize: 11, color: Colors.black45)),
           ],
+          if (!m.mine) _controls(m),
         ]),
       ),
     );

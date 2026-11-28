@@ -108,9 +108,40 @@ function render(d) {
       + (s.reviewed ? ' <span class="badge bg-success-subtle text-success border">clinically reviewed</span>' : ' <span class="badge bg-warning-subtle text-dark border">pending review</span>') + '</li>').join('') + '</ol></div>';
   if (d.library && d.library.length) html += '<div class="src"><b>Read more:</b> ' + d.library.map(l => `<a href="${E(l.url)}">${E(l.name)}</a>`).join(' · ') + '</div>';
   if (d.follow_up && d.follow_up.length) html += '<div class="d-flex flex-wrap gap-1 mt-2">' + d.follow_up.map(f => `<span class="badge rounded-pill text-bg-light border">${E(f)}</span>`).join('') + '</div>';
-  html += `<div class="small text-muted mt-1">${E(d.disclaimer || '')}${d.mode === 'llm_grounded' ? ' · AI-written from the sources above' : d.mode === 'extractive' ? ' · quoted from the sources above' : ''}</div>`;
+  if (d.suggestions && d.suggestions.length) html += '<div class="d-flex flex-wrap gap-1 mt-2" aria-label="Suggested next steps">' + d.suggestions.map(s =>
+      `<a class="btn btn-sm ${s.pinned ? 'btn-danger' : 'btn-outline-primary'}" href="${E(ACTIONS[s.action] || '#')}" title="${E(s.reason)}" data-sugg="${E(s.id)}">${E(s.label)}</a>`).join('') + '</div>';
+  if (d.mode !== 'conversation') html += `<div class="small text-muted mt-1">${E(d.disclaimer || '')}${d.mode === 'llm_grounded' ? ' · AI-written from the sources above' : d.mode === 'extractive' ? ' · quoted from the sources above' : ''}</div>`;
+  if (d.response_id) html += `<div class="small mt-1 d-flex gap-2 align-items-center" data-fb="${E(d.response_id)}" data-msg="${E(d.message_id || '')}">
+      <span class="text-muted">Was this helpful?</span>
+      <button type="button" class="btn btn-sm btn-link p-0" data-rate="helpful" aria-label="Helpful"><i class="bi bi-hand-thumbs-up"></i></button>
+      <button type="button" class="btn btn-sm btn-link p-0" data-rate="unhelpful" aria-label="Not helpful"><i class="bi bi-hand-thumbs-down"></i></button>
+      <button type="button" class="btn btn-sm btn-link p-0" data-rate="unclear">Unclear</button></div>`;
   return html;
 }
+
+// Suggested actions open existing pages only; nothing is executed automatically.
+const ACTIONS = {
+  emergency: "{% if user.role == 'patient' %}{% url 'request_emergency' %}{% else %}{% url 'login' %}{% endif %}",
+  call_hotline: "tel:{{ hotline }}", hospitals: "{% url 'hospitals' %}",
+  vital_signs: "{% if user.role == 'patient' %}{% url 'patient_home' %}{% endif %}",
+  request_test: "{% if user.role == 'patient' %}{% url 'patient_tests' %}{% endif %}",
+  results: "{% if user.role == 'patient' %}{% url 'patient_tests' %}{% endif %}",
+  dashboard_emergencies: "{% if user.role == 'operator' or user.role == 'admin' or user.role == 'hospital' or user.is_superuser %}{% url 'dashboard' %}{% endif %}",
+  dashboard_vitals: "{% if user.role == 'operator' or user.role == 'admin' or user.is_superuser %}{% url 'dashboard' %}#vs-title{% endif %}",
+};
+async function sendFeedback(box, rating, suggestion) {
+  try {
+    await api("{% url 'assistant_feedback' %}", {method: 'POST', body: JSON.stringify({
+      response_id: box.dataset.fb, message_id: box.dataset.msg || null, rating, suggestion})});
+    if (rating !== 'suggestion') box.innerHTML = '<span class="text-muted">Thank you - your feedback helps us review answers.</span>';
+  } catch (e) { /* feedback is optional */ }
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-rate]');
+  if (b) sendFeedback(b.closest('[data-fb]'), b.dataset.rate);
+  const s = e.target.closest('[data-sugg]');
+  if (s) { const box = s.closest('.msg') && s.closest('.msg').querySelector('[data-fb]'); if (box) sendFeedback(box, 'suggestion', s.dataset.sugg); }
+});
 
 async function api(url, opts = {}) {
   const r = await fetch(url, {credentials: 'same-origin', ...opts,
